@@ -144,7 +144,7 @@ class ParkingLot:
         )
 
         if already_inside:
-            print("❌ Ese vehículo ya se encuentra dentro del parqueadero")
+            print("Ese vehículo ya se encuentra dentro del parqueadero!")
             return None
 
         # -----------------------------------------------
@@ -156,15 +156,15 @@ class ParkingLot:
             reservation = self.reservations.get(reservation_id)
 
             if reservation is None:
-                print("❌ Reservation not found")
+                print("Reservation not found!")
                 return None
 
             if not reservation.active:
-                print("❌ Reservation is no longer active")
+                print("Reservation is no longer active!")
                 return None
 
             if reservation.plate != plate:
-                print("❌ Plate does not match reservation")
+                print("Plate does not match reservation!")
                 return None
 
             space = self.spaces[reservation.space_id]
@@ -182,7 +182,7 @@ class ParkingLot:
             ]
 
             if not available_spaces:
-                print("❌ Parking lot is full")
+                print("Parking lot is full!")
                 return None
 
             space = random.choice(available_spaces)
@@ -193,7 +193,7 @@ class ParkingLot:
 
         if not space.occupy(plate):
 
-            print("❌ Could not occupy parking space")
+            print("Could not occupy parking space!")
             return None
 
         if reservation:
@@ -225,7 +225,7 @@ class ParkingLot:
         ]
 
         if not occupied_spaces:
-            print("❌ Vehicle not found inside parking lot")
+            print("Vehicle not found inside parking lot!")
             return None
 
         space = occupied_spaces[0]
@@ -415,11 +415,11 @@ class ParkingCLI:
                 self.action_auto_simulation()
 
             elif choice == "0":
-                print("\n👋 Cerrando simulador. ¡Hasta luego!\n")
+                print("\nCerrando simulador. ¡Hasta luego!\n")
                 break
 
             else:
-                print("⚠️  Opción no válida, intenta de nuevo.")
+                print("Opción no válida, intenta de nuevo.")
 
             input("\n(Enter para continuar...)")
 
@@ -430,7 +430,7 @@ class ParkingCLI:
     def print_header(self):
 
         print("=" * 55)
-        print("        🅿️  SIMULADOR IoT DE PARQUEADERO")
+        print("           SIMULADOR IoT DE PARQUEADERO")
         print("=" * 55)
 
     def print_menu(self):
@@ -455,17 +455,17 @@ class ParkingCLI:
         plate = input("Placa del vehículo a reservar: ").strip().upper()
 
         if not plate:
-            print("⚠️  Debes ingresar una placa.")
+            print("Debes ingresar una placa.")
             return
 
         reservation = self.parking.create_reservation(plate)
 
         if reservation is None:
-            print("❌ No hay espacios disponibles para reservar.")
+            print("No hay espacios disponibles para reservar.")
             return
 
         print(
-            f"✅ Reserva creada: {reservation.reservation_id} "
+            f"Reserva creada: {reservation.reservation_id} "
             f"→ {reservation.plate} → {reservation.space_id}"
         )
 
@@ -474,7 +474,7 @@ class ParkingCLI:
         plate = input("Placa del vehículo que ingresa: ").strip().upper()
 
         if not plate:
-            print("⚠️  Debes ingresar una placa.")
+            print("Debes ingresar una placa.")
             return
 
         has_reservation = input(
@@ -492,7 +492,7 @@ class ParkingCLI:
         )
 
         if event:
-            print("✅ Entrada registrada:")
+            print("Entrada registrada:")
             print(json.dumps(event, indent=4, ensure_ascii=False))
 
     def action_vehicle_exit(self):
@@ -500,7 +500,7 @@ class ParkingCLI:
         occupied = self.parking.get_occupied_plates()
 
         if not occupied:
-            print("ℹ️  No hay vehículos dentro del parqueadero.")
+            print("No hay vehículos dentro del parqueadero.")
             return
 
         print(f"Vehículos dentro: {', '.join(occupied)}")
@@ -510,14 +510,14 @@ class ParkingCLI:
         event = self.parking.vehicle_exit(plate)
 
         if event:
-            print("✅ Salida registrada:")
+            print("Salida registrada:")
             print(json.dumps(event, indent=4, ensure_ascii=False))
 
     def action_show_sensor_events(self):
 
         events = self.parking.get_status_events()
 
-        print("\n📡 Eventos de sensores:")
+        print("\nEventos de sensores:")
 
         for event in events:
             print(json.dumps(event, indent=4, ensure_ascii=False))
@@ -527,10 +527,10 @@ class ParkingCLI:
         active = self.parking.get_active_reservations()
 
         if not active:
-            print("ℹ️  No hay reservas activas.")
+            print("No hay reservas activas.")
             return
 
-        print("\n📋 Reservas activas:")
+        print("\n Reservas activas:")
 
         for r in active:
             print(f"{r.reservation_id} → {r.plate} → {r.space_id}")
@@ -542,7 +542,7 @@ class ParkingCLI:
                 "¿Cuántos eventos aleatorios generar? (ej: 10): "
             ).strip())
         except ValueError:
-            print("⚠️  Debes ingresar un número.")
+            print("Debes ingresar un número.")
             return
 
         try:
@@ -552,7 +552,7 @@ class ParkingCLI:
         except ValueError:
             delay = 0
 
-        print(f"\n🤖 Simulando {n_events} eventos aleatorios...\n")
+        print(f"\n Simulando {n_events} eventos aleatorios...\n")
 
         for i in range(n_events):
 
@@ -567,7 +567,7 @@ class ParkingCLI:
                 event = self.parking.vehicle_exit(plate)
 
                 if event:
-                    print(f"[{i+1}] 🚙 Salida → {plate}")
+                    print(f"[{i+1}] Salida → {plate}")
 
             elif action == "reservation":
 
@@ -576,11 +576,11 @@ class ParkingCLI:
 
                 if reservation:
                     print(
-                        f"[{i+1}] 📋 Reserva → {reservation.plate} "
+                        f"[{i+1}] Reserva → {reservation.plate} "
                         f"→ {reservation.space_id}"
                     )
                 else:
-                    print(f"[{i+1}] ⚠️  No hay espacios para reservar")
+                    print(f"[{i+1}] No hay espacios para reservar")
 
             else:
 
@@ -598,7 +598,7 @@ class ParkingCLI:
                     event = self.parking.vehicle_entry(plate=plate)
 
                 if event:
-                    print(f"[{i+1}] 🚗 Entrada → {event['plate']}")
+                    print(f"[{i+1}] Entrada → {event['plate']}")
 
             if delay > 0:
                 time.sleep(delay)
