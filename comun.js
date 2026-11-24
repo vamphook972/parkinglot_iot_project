@@ -8,7 +8,7 @@
 //  - Abierta de otra forma (archivo suelto, Live Server…): se redirige a Node-RED local,
 //    porque desde ahí el navegador bloquearía POST/DELETE (CORS).
 const EN_PAGES = location.hostname.endsWith('github.io');
-const NODE_RED = location.pathname.startsWith('/app') ? location.origin
+let NODE_RED = location.pathname.startsWith('/app') ? location.origin
     : EN_PAGES ? String(window.PARKING_API || '').replace(/\/+$/, '')
     : 'http://localhost:1880';
 if (!EN_PAGES && !location.pathname.startsWith('/app')) {
@@ -43,11 +43,28 @@ async function api(ruta, opciones = {}) {
     try {
         resp = await fetch(NODE_RED + ruta, init);
     } catch (e) {
+        // En GitHub Pages la URL del túnel puede haber cambiado y el navegador tener el config.js
+        // viejo en caché (Pages lo guarda 10 min): se relee sin caché y se reintenta una vez.
+        if (!opciones.reintento && await releerConfig()) return api(ruta, { ...opciones, reintento: true });
         return { ok: false, status: 0, data: { error: 'SIN_CONEXION', detail: 'No hay conexión con Node-RED' } };
     }
     let data = null;
     try { data = await resp.json(); } catch { /* respuesta sin cuerpo JSON */ }
     return { ok: resp.ok, status: resp.status, data };
+}
+
+// Lee config.js saltándose la caché. true si trajo una URL distinta a la que se estaba usando.
+let ultimaRelectura = 0;
+async function releerConfig() {
+    if (!EN_PAGES || Date.now() - ultimaRelectura < 10000) return false;
+    ultimaRelectura = Date.now();
+    try {
+        const texto = await (await fetch(`config.js?v=${Date.now()}`, { cache: 'no-store' })).text();
+        const m = texto.match(/PARKING_API\s*=\s*['"]([^'"]+)['"]/);
+        const url = m ? m[1].replace(/\/+$/, '') : '';
+        if (url && url !== NODE_RED) { NODE_RED = url; return true; }
+    } catch { /* sin red: se sigue mostrando el aviso */ }
+    return false;
 }
 
 // ---------- Estado de una bahía ----------
