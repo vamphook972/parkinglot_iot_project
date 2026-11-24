@@ -1,0 +1,20 @@
+meta {
+  name: 14 Cancelar reserva reserved
+  type: http
+  seq: 15
+}
+
+delete {
+  url: {{baseUrl}}/reservas/{{ridC}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq cancelled
+}
+
+docs {
+  La reserva 05 estaba `reserved`: el nodo nunca se enteró, no se publica nada.
+}

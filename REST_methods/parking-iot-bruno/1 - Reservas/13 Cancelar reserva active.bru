@@ -1,0 +1,21 @@
+meta {
+  name: 13 Cancelar reserva active
+  type: http
+  seq: 14
+}
+
+delete {
+  url: http://localhost:1880/reservas/RSV-PRUEBA_AF1
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq cancelled
+}
+
+docs {
+  La reserva 01 estaba `active` (amarillo encendido), así que Node-RED publica
+  `bahia/reserva` con `reserved: false`.
+}

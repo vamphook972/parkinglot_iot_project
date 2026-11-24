@@ -1,0 +1,37 @@
+meta {
+  name: 05 Crear reserva (en 2 h -> reserved)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/reservas
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reservation_id": "{{ridC}}",
+    "node_id": "{{nodeId}}",
+    "space_id": "{{bayB}}",
+    "plate": "{{plateC}}",
+    "starts_at": "{{start120}}",
+    "ends_at": "{{end180}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.reservation_id: eq {{ridC}}
+  res.body.status: eq reserved
+}
+
+docs {
+  Empieza en más de 10 min: queda `reserved` y NO se publica nada al nodo
+  (el amarillo se enciende luego, cuando la revisión de cada minuto la active).
+}

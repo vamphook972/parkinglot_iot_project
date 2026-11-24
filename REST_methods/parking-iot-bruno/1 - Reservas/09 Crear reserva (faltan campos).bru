@@ -1,0 +1,36 @@
+meta {
+  name: 09 Crear reserva (faltan campos)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/reservas
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reservation_id": "{{ridB}}",
+    "node_id": "{{nodeId}}",
+    "space_id": "{{bayC}}",
+    "starts_at": "{{start30}}",
+    "ends_at": "{{end90}}"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: eq BAD_REQUEST
+}
+
+tests {
+  test("el detalle menciona la placa", function () {
+    expect(res.body.detail).to.include("plate");
+  });
+}

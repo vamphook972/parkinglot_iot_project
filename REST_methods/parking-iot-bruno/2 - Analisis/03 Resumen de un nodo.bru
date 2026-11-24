@@ -1,0 +1,25 @@
+meta {
+  name: 03 Resumen de un nodo
+  type: http
+  seq: 3
+}
+
+get {
+  url: http://localhost:1880/api/resumen/PARKING-002
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("responde una lista", function () {
+    expect(res.body).to.be.an("array");
+  });
+}
+
+docs {
+  Cambia `nodeId` en el entorno por un nodo que tenga datos (ej. PARKING-002).
+}

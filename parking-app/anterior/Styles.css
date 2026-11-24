@@ -1,0 +1,176 @@
+/* ==========================================================================
+   Parking IoT · app de monitoreo
+   Colores tomados de la señalización vial: azul de la señal de parqueo,
+   amarillo de las líneas del piso y grises de asfalto.
+   ========================================================================== */
+
+:root {
+    color-scheme: light;
+    --pagina: #f1f3f5;
+    --panel: #ffffff;
+    --borde: #d9dee3;
+    --rejilla: #e6e9ed;
+    --texto: #17212b;
+    --texto-2: #52606d;
+    --senal: #1f5fae;          /* azul de la señal "P" */
+    --linea: #f2b705;          /* amarillo de demarcación */
+    --serie-1: #2a78d6;        /* placa / nodo elegido */
+    --serie-2: #eb6834;        /* QR */
+    --referencia: #8a95a0;     /* línea de "todos los nodos" */
+    --pista: #e4e8ec;          /* fondo de las barras de la tabla */
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --pagina: #12171c;
+        --panel: #1a2128;
+        --borde: #2c3640;
+        --rejilla: #2a333c;
+        --texto: #eef1f4;
+        --texto-2: #a9b4bf;
+        --senal: #1b4f91;
+        --linea: #d9a300;
+        --serie-1: #3987e5;
+        --serie-2: #d95926;
+        --referencia: #7d8893;
+        --pista: #2a333c;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--pagina);
+    color: var(--texto);
+    /* tipografía de señalización: DIN en Windows y macOS, sin descargar nada */
+    font-family: Bahnschrift, "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Barra superior ---------- */
+.barra {
+    background: var(--senal);
+    color: #ffffff;
+    border-bottom: 4px solid var(--linea);
+}
+.barra-in {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.marca { display: flex; align-items: center; gap: 14px; }
+.senal {
+    width: 46px; height: 46px;
+    display: grid; place-items: center;
+    border: 3px solid #ffffff;
+    border-radius: 8px;
+    font-size: 30px; font-weight: 700; line-height: 1;
+}
+.marca h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: 0.01em; }
+.marca p  { margin: 0; font-size: 14px; opacity: 0.85; }
+
+.vistas { display: flex; border: 2px solid #ffffff; border-radius: 8px; overflow: hidden; }
+.vistas button {
+    font: inherit; font-size: 15px;
+    padding: 8px 18px;
+    border: 0; background: transparent; color: #ffffff; cursor: pointer;
+}
+.vistas button.activa { background: #ffffff; color: var(--senal); font-weight: 700; }
+
+/* ---------- Contenido ---------- */
+main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+section > * + * { margin-top: 20px; }
+
+.aviso {
+    margin: 0 0 20px;
+    padding: 14px 16px;
+    background: var(--panel);
+    border: 1px solid var(--borde);
+    border-left: 6px solid var(--linea);
+    border-radius: 6px;
+}
+
+/* Selector de parqueadero: como una fila de bahías separadas por líneas */
+.nodos { display: flex; flex-wrap: wrap; border-bottom: 2px solid var(--borde); }
+.nodos button {
+    font: inherit;
+    padding: 10px 20px 12px;
+    margin-bottom: -2px;
+    border: 0; border-bottom: 4px solid transparent;
+    border-left: 2px dashed var(--borde);
+    background: transparent; color: var(--texto-2); cursor: pointer;
+}
+.nodos button:first-child { border-left: 0; }
+.nodos button:hover { color: var(--texto); }
+.nodos button.activa { color: var(--texto); font-weight: 700; border-bottom-color: var(--linea); }
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 20px 22px;
+    min-width: 0;
+}
+.panel h2 { margin: 0; font-size: 19px; font-weight: 700; }
+.nota { margin: 2px 0 14px; font-size: 14px; color: var(--texto-2); }
+
+.principal { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; align-items: stretch; }
+.fila { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; }
+
+.lienzo { position: relative; height: 250px; }
+/* la gráfica principal ocupa todo el alto que le deja la columna de indicadores */
+.principal .panel { display: flex; flex-direction: column; }
+.lienzo.alto { flex: 1; height: auto; min-height: 320px; }
+
+/* Indicadores: una lista, no tarjetas; el primero es el dato principal */
+.indicadores {
+    margin: 0;
+    background: var(--panel);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 6px 22px;
+    display: flex; flex-direction: column; justify-content: space-between;
+}
+.indicadores div { padding: 12px 0; border-top: 1px solid var(--rejilla); }
+.indicadores div:first-child { border-top: 0; }
+.indicadores dt { font-size: 14px; color: var(--texto-2); }
+.indicadores dd { margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2; }
+.indicadores dd small { display: block; font-size: 14px; font-weight: 400; color: var(--texto-2); }
+.indicadores div:first-child dd { font-size: 46px; }
+
+/* ---------- Tabla de comparación ---------- */
+.tabla-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th {
+    text-align: left; font-weight: 400; font-size: 14px; color: var(--texto-2);
+    padding: 8px 12px; border-bottom: 2px solid var(--borde); white-space: nowrap;
+}
+td { padding: 11px 12px; border-bottom: 1px solid var(--rejilla); white-space: nowrap; }
+.num { text-align: right; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--pagina); }
+tbody tr.activa td:first-child { box-shadow: inset 4px 0 0 var(--linea); font-weight: 700; }
+tbody tr:focus-visible, button:focus-visible { outline: 3px solid var(--linea); outline-offset: -3px; }
+
+.barra-celda { display: flex; align-items: center; gap: 10px; min-width: 200px; }
+.barra-celda .pista { flex: 1; height: 10px; background: var(--pista); border-radius: 0 4px 4px 0; }
+.barra-celda .relleno { display: block; height: 100%; background: var(--serie-1); border-radius: 0 4px 4px 0; }
+.barra-celda .valor { width: 54px; text-align: right; }
+
+iframe { border: 1px solid var(--borde); border-radius: 8px; background: var(--panel); display: block; }
+
+@media (max-width: 900px) {
+    .principal, .fila { grid-template-columns: minmax(0, 1fr); }
+    .indicadores { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
+    .indicadores div:first-child { grid-column: 1 / -1; }
+    .indicadores div:nth-child(2) { border-top: 1px solid var(--rejilla); }
+    main { padding: 16px; }
+}

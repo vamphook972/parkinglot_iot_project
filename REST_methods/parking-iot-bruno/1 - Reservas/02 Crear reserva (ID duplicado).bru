@@ -1,0 +1,31 @@
+meta {
+  name: 02 Crear reserva (ID duplicado)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/reservas
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reservation_id": "{{ridA}}",
+    "node_id": "{{nodeId}}",
+    "space_id": "{{bayC}}",
+    "plate": "{{plateC}}",
+    "starts_at": "{{start30}}",
+    "ends_at": "{{end90}}"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error: eq DUPLICATE_ID
+}

@@ -1,0 +1,25 @@
+meta {
+  name: 08 Distribucion de categorias
+  type: http
+  seq: 8
+}
+
+get {
+  url: http://localhost:1880/api/categorias/TODOS
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("las categorías son las esperadas", function () {
+    expect(res.body).to.be.an("array");
+    const validas = ["estado_reserva", "modo_acceso", "tipo_estadia"];
+    res.body.forEach(function (f) {
+      expect(validas).to.include(f.category);
+    });
+  });
+}

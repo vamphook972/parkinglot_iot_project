@@ -1,0 +1,17 @@
+meta {
+  name: Mostrar bahias
+  type: http
+  seq: 19
+}
+
+get {
+  url: http://localhost:1880/parqueaderos/PARKING-002/bahias
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

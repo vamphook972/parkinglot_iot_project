@@ -1,0 +1,15 @@
+meta {
+  name: 09 Ruta inexistente
+  type: http
+  seq: 9
+}
+
+get {
+  url: http://localhost:1880/api/no-existe
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+}

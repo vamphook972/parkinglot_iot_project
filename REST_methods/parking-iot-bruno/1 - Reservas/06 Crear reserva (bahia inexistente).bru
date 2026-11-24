@@ -1,0 +1,31 @@
+meta {
+  name: 06 Crear reserva (bahia inexistente)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/reservas
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reservation_id": "{{ridB}}",
+    "node_id": "{{nodeId}}",
+    "space_id": "B-999",
+    "plate": "{{plateB}}",
+    "starts_at": "{{start30}}",
+    "ends_at": "{{end90}}"
+  }
+}
+
+assert {
+  res.status: eq 404
+  res.body.error: eq INVALID_BAY
+}

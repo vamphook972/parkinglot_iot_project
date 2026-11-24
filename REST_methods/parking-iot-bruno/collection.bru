@@ -1,0 +1,47 @@
+docs {
+  # Parking IoT: pruebas de la API REST
+
+  Antes de correr:
+  1. Selecciona el entorno `local`.
+  2. Node-RED debe estar corriendo en `localhost:1880` con MySQL arriba.
+  3. El nodo `PARKING-TEST` con las bahías B-001, B-002 y B-003 debe existir
+     (click en el inject "1) registro" de Node-RED).
+  4. Para la carpeta "2 - Analisis" hay que haber corrido antes el inject
+     "Correr análisis"; si no, las tablas an_* están vacías y responden [].
+
+  Las reservas se crean con IDs y placas aleatorios por sesión (para no chocar
+  con DUPLICATE_ID al repetir). Las fechas se recalculan en cada request.
+  Corre la carpeta "1 - Reservas" completa y en orden (Runner).
+
+  La cola de Node-RED deja pasar 1 mensaje cada 2 s, así que cada request
+  puede tardar hasta ~2 s.
+}
+
+script:pre-request {
+  const fmt = (ms) => new Date(ms - 5 * 3600 * 1000).toISOString().slice(0, 19) + '-05:00';
+  const now = Date.now();
+  const min = 60000;
+
+  // Fechas relativas a "ahora", en hora de Colombia (-05:00)
+  bru.setVar('start5',   fmt(now + 5 * min));
+  bru.setVar('end65',    fmt(now + 65 * min));
+  bru.setVar('start30',  fmt(now + 30 * min));
+  bru.setVar('end90',    fmt(now + 90 * min));
+  bru.setVar('start120', fmt(now + 120 * min));
+  bru.setVar('end180',   fmt(now + 180 * min));
+  bru.setVar('pastStart', fmt(now - 120 * min));
+  bru.setVar('pastEnd',   fmt(now - 60 * min));
+
+  // IDs y placas aleatorios, una sola vez por sesión
+  if (!bru.getVar('runId')) {
+    const id = Math.random().toString(36).slice(2, 7).toUpperCase();
+    const num = () => String(Math.floor(1000 + Math.random() * 9000));
+    bru.setVar('runId', id);
+    bru.setVar('ridA', 'RSV-A' + id);
+    bru.setVar('ridB', 'RSV-B' + id);
+    bru.setVar('ridC', 'RSV-C' + id);
+    bru.setVar('plateA', 'PA' + num());
+    bru.setVar('plateB', 'PB' + num());
+    bru.setVar('plateC', 'PC' + num());
+  }
+}

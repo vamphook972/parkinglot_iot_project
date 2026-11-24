@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Parking IoT · Administración</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111110'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='800' font-size='19' fill='white' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="estilos.css">
+    <style>
+        .marca .logo { background: var(--texto); color: var(--panel); }
+        .cabeza-pagina { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+        .cabeza-pagina h1 { font-size: 1.6rem; font-weight: 750; letter-spacing: -0.02em; }
+        .cabeza-pagina p { color: var(--texto-2); margin-top: 4px; font-size: 0.92rem; }
+
+        .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+        .kpi { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 14px 16px; box-shadow: var(--sombra); }
+        .kpi dt { font-size: 0.8rem; color: var(--texto-2); font-weight: 550; display: flex; align-items: center; gap: 6px; }
+        .kpi dt i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+        .kpi dd { margin: 6px 0 0; font-size: 1.75rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .kpi small { display: block; font-size: 0.78rem; color: var(--texto-3); font-weight: 500; letter-spacing: 0; margin-top: 4px; }
+
+        #kpis-analisis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        @media (min-width: 1150px) { #kpis-analisis { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+        @media (max-width: 560px) { #kpis-analisis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        .rejilla-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        @media (max-width: 900px) { .rejilla-2 { grid-template-columns: 1fr; } }
+        .lienzo { position: relative; height: 280px; }
+        .lienzo.alto { height: 320px; }
+        .lienzo[data-vacio] canvas { visibility: hidden; }
+        .lienzo[data-vacio]::after { content: attr(data-vacio); position: absolute; inset: 0; display: grid; place-items: center; color: var(--texto-3); font-size: 0.9rem; }
+
+        .lotes-admin { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+        .lote-admin { background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); padding: 16px; box-shadow: var(--sombra); display: grid; gap: 12px; }
+        .lote-admin .fila-1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .lote-admin .senal { font-size: 0.78rem; color: var(--texto-3); }
+        .mini-bahias { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+        .mini { border-radius: 9px; padding: 7px 4px; text-align: center; font-size: 0.74rem; font-weight: 700; display: grid; justify-items: center; gap: 2px; }
+        .mini svg { width: 18px; height: 18px; }
+        .mini.libre { background: var(--libre-suave); color: var(--libre); }
+        .mini.ocupada { background: var(--ocupada-suave); color: var(--ocupada); }
+        .mini.reservada { background: var(--reservada-suave); color: var(--reservada); outline: 1.5px dashed var(--reservada-borde); outline-offset: -1.5px; }
+
+        .barra-celda { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+        .pista { flex: 1; height: 6px; border-radius: 99px; background: var(--rejilla); overflow: hidden; }
+        .relleno { display: block; height: 100%; background: var(--serie-1); border-radius: 99px; }
+        .tendencia-sube { color: var(--libre); } .tendencia-baja { color: var(--ocupada); }
+        .filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .periodo { font-size: 0.85rem; color: var(--texto-2); background: var(--panel); border: 1px solid var(--borde); border-radius: 999px; padding: 6px 12px; }
+    </style>
+</head>
+<body>
+    <header class="barra">
+        <div class="barra-in">
+            <a class="marca" href="admin.html">
+                <span class="logo" aria-hidden="true">P</span>
+                <span><strong>Parking IoT</strong><small>Administración</small></span>
+            </a>
+            <div class="pestanas" role="tablist" aria-label="Secciones">
+                <button type="button" role="tab" id="tab-vivo" aria-controls="vista-vivo" aria-selected="true">En vivo</button>
+                <button type="button" role="tab" id="tab-analisis" aria-controls="vista-analisis" aria-selected="false">Análisis</button>
+            </div>
+            <span class="en-vivo" id="vivo"><span class="punto"></span><span class="texto">Conectando…</span></span>
+            <a class="enlace-sutil solo-escritorio" href="index.html">Sitio de usuario ↗</a>
+        </div>
+    </header>
+
+    <main>
+        <div id="aviso-global" class="aviso error" hidden style="margin-bottom:16px"></div>
+
+        <!-- ===================== EN VIVO ===================== -->
+        <section id="vista-vivo" role="tabpanel" aria-labelledby="tab-vivo">
+            <div class="cabeza-pagina">
+                <div>
+                    <h1>Operación en vivo</h1>
+                    <p>Estado de los sensores y reservas en este momento. Se actualiza cada 5 segundos.</p>
+                </div>
+            </div>
+
+            <dl class="kpis" id="kpis-vivo"></dl>
+
+            <section class="seccion">
+                <div class="titulo"><h2>Parqueaderos</h2>
+                    <div class="leyenda"><span><i class="l-libre"></i>Libre</span><span><i class="l-ocupada"></i>Ocupada</span><span><i class="l-reservada"></i>Reservada</span></div>
+                </div>
+                <div class="lotes-admin" id="lotes-admin"></div>
+            </section>
+
+            <section class="seccion panel">
+                <div class="panel-cabeza">
+                    <div>
+                        <h2 id="t-reservas">Reservas en curso</h2>
+                        <p class="nota" id="nota-reservas-vivo">Programadas, vigentes (bahía apartada) y con el carro adentro</p>
+                    </div>
+                    <div class="chips" id="filtro-reservas" role="group" aria-label="Filtrar reservas">
+                        <button type="button" class="chip" data-f="todas" aria-pressed="true">Todas</button>
+                        <button type="button" class="chip" data-f="active" aria-pressed="false">Vigentes</button>
+                        <button type="button" class="chip" data-f="entered" aria-pressed="false">Carro adentro</button>
+                        <button type="button" class="chip" data-f="reserved" aria-pressed="false">Programadas</button>
+                        <button type="button" class="chip" data-f="cancelled" aria-pressed="false">Canceladas</button>
+                    </div>
+                </div>
+                <div class="tabla-scroll">
+                    <table>
+                        <thead><tr><th>Código</th><th>Parqueadero</th><th>Bahía</th><th>Placa</th><th>Estado</th><th>Horario</th><th class="num" id="th-accion"></th></tr></thead>
+                        <tbody id="tabla-reservas"></tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+
+        <!-- ===================== ANÁLISIS ===================== -->
+        <section id="vista-analisis" role="tabpanel" aria-labelledby="tab-analisis" hidden>
+            <div class="cabeza-pagina">
+                <div>
+                    <h1>Análisis del periodo</h1>
+                    <p>Resultados del análisis descriptivo, calculados sobre los datos limpios.</p>
+                </div>
+                <span class="periodo" id="periodo">–</span>
+            </div>
+
+            <div class="filtros" id="nodos" role="group" aria-label="Parqueadero"></div>
+
+            <div id="analisis-vacio" class="panel vacio seccion" hidden>
+                <strong>Todavía no hay análisis guardado</strong>
+                En Node-RED, grupo <em>4 · Análisis de datos</em>, corre primero <em>Correr limpieza</em> y luego <em>Correr análisis</em>.
+            </div>
+
+            <div id="analisis-contenido">
+                <dl class="kpis seccion" id="kpis-analisis" style="margin-top:16px"></dl>
+
+                <article class="panel seccion">
+                    <div class="panel-cabeza">
+                        <div><h2>Ocupación a lo largo del día</h2><p class="nota">Porcentaje promedio de bahías ocupadas en cada hora</p></div>
+                    </div>
+                    <div class="lienzo alto"><canvas id="g-horas" role="img" aria-label="Ocupación promedio por hora"></canvas></div>
+                </article>
+
+                <div class="rejilla-2 seccion">
+                    <article class="panel">
+                        <div class="panel-cabeza"><div><h2>Entradas por día</h2><p class="nota">Carros que entraron con la placa o con el QR de una reserva</p></div></div>
+                        <div class="lienzo"><canvas id="g-dias" role="img" aria-label="Entradas por día"></canvas></div>
+                    </article>
+                    <article class="panel">
+                        <div class="panel-cabeza"><div><h2>Cómo terminaron las reservas</h2><p class="nota" id="nota-reservas"></p></div></div>
+                        <div class="lienzo"><canvas id="g-reservas" role="img" aria-label="Estado final de las reservas"></canvas></div>
+                    </article>
+                </div>
+
+                <div class="rejilla-2 seccion">
+                    <article class="panel">
+                        <div class="panel-cabeza"><div><h2>Modo de acceso</h2><p class="nota">Cómo entraron los carros</p></div></div>
+                        <div class="lienzo" style="height:200px"><canvas id="g-acceso" role="img" aria-label="Modo de acceso"></canvas></div>
+                    </article>
+                    <article class="panel">
+                        <div class="panel-cabeza"><div><h2>Tipo de estadía</h2><p class="nota">Cuánto tiempo se quedaron</p></div></div>
+                        <div class="lienzo" style="height:200px"><canvas id="g-estadia" role="img" aria-label="Tipo de estadía"></canvas></div>
+                    </article>
+                </div>
+
+                <article class="panel seccion">
+                    <div class="panel-cabeza"><div><h2>Comparación entre parqueaderos</h2><p class="nota">Toca una fila para ver ese parqueadero</p></div></div>
+                    <div class="tabla-scroll">
+                        <table>
+                            <thead><tr>
+                                <th>Parqueadero</th><th class="num">Bahías</th><th>Ocupación</th><th class="num">Entradas/día</th>
+                                <th class="num">Por bahía/día</th><th class="num">Estadía media</th><th class="num">Hora pico</th>
+                                <th class="num">% QR</th><th class="num">Sin llegada</th><th class="num">Veces lleno</th>
+                            </tr></thead>
+                            <tbody id="tabla-nodos"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <footer class="pie">
+        <span>Parking IoT · Panel de administración</span>
+        <span id="pie-api"></span>
+    </footer>
+
+    <dialog id="d-cancelar" aria-labelledby="t-cancelar">
+        <div class="dialogo-cuerpo">
+            <h2 id="t-cancelar">¿Cancelar esta reserva?</h2>
+            <p class="nota" id="cancelar-texto" style="margin-top:8px"></p>
+            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+                <button class="boton" type="button" data-cerrar>No</button>
+                <button class="boton peligro" type="button" id="b-confirmar-cancelar">Sí, cancelar</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="comun.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

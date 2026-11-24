@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Parqueaderos · Parking IoT</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <header class="barra">
+        <div class="barra-in">
+            <div class="marca">
+                <span class="senal" aria-hidden="true">P</span>
+                <div>
+                    <h1>Parqueaderos</h1>
+                    <p id="periodo">Cargando…</p>
+                </div>
+            </div>
+            <nav class="vistas" aria-label="Vista">
+                <button type="button" data-vista="historico" class="activa">Histórico</button>
+                <button type="button" data-vista="vivo">En vivo</button>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <p id="aviso" class="aviso" hidden></p>
+
+        <!-- ================= Vista: histórico (API REST + Chart.js) ================= -->
+        <section id="vista-historico">
+            <nav id="nodos" class="nodos" aria-label="Parqueadero"></nav>
+
+            <div class="principal">
+                <article class="panel">
+                    <h2>Ocupación a lo largo del día</h2>
+                    <p class="nota">Porcentaje promedio de bahías ocupadas en cada hora</p>
+                    <div class="lienzo alto"><canvas id="g-horas"></canvas></div>
+                </article>
+
+                <dl id="indicadores" class="indicadores"></dl>
+            </div>
+
+            <div class="fila">
+                <article class="panel">
+                    <h2>Entradas por día</h2>
+                    <p class="nota">Carros que entraron digitando la placa o con el QR de una reserva</p>
+                    <div class="lienzo"><canvas id="g-dias"></canvas></div>
+                </article>
+                <article class="panel">
+                    <h2>Cómo terminaron las reservas</h2>
+                    <p class="nota" id="nota-reservas"></p>
+                    <div class="lienzo"><canvas id="g-reservas"></canvas></div>
+                </article>
+            </div>
+
+            <article class="panel">
+                <h2>Comparación entre parqueaderos</h2>
+                <p class="nota">Elige una fila para ver ese parqueadero</p>
+                <div class="tabla-scroll">
+                    <table id="tabla">
+                        <thead>
+                            <tr>
+                                <th>Parqueadero</th>
+                                <th class="num">Bahías</th>
+                                <th>Ocupación promedio</th>
+                                <th class="num">Entradas por día</th>
+                                <th class="num">Carros por bahía al día</th>
+                                <th class="num">Estadía media</th>
+                                <th class="num">Hora pico</th>
+                                <th class="num">Veces lleno</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <!-- ================= Vista: en vivo (dashboard de Node-RED embebido) ================= -->
+        <section id="vista-vivo" hidden>
+            <iframe id="dashboardFrame" title="Dashboard en vivo de Node-RED" width="100%" height="760"></iframe>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

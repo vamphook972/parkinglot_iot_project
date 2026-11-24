@@ -1,0 +1,28 @@
+meta {
+  name: 02 Resumen de TODOS
+  type: http
+  seq: 2
+}
+
+get {
+  url: http://localhost:1880/api/resumen/TODOS
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("responde una lista", function () {
+    expect(res.body).to.be.an("array");
+  });
+  test("si hay datos, la fila es del total", function () {
+    if (res.body.length > 0) {
+      expect(res.body[0].node_id).to.equal("TODOS");
+      expect(res.body[0]).to.have.property("entries");
+      expect(res.body[0]).to.have.property("occupancy_pct");
+    }
+  });
+}

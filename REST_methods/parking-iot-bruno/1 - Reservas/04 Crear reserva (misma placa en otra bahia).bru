@@ -1,0 +1,35 @@
+meta {
+  name: 04 Crear reserva (misma placa en otra bahia)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/reservas
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reservation_id": "{{ridB}}",
+    "node_id": "{{nodeId}}",
+    "space_id": "{{bayB}}",
+    "plate": "{{plateA}}",
+    "starts_at": "{{start30}}",
+    "ends_at": "{{end90}}"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error: eq PLATE_OVERLAP
+}
+
+docs {
+  La bahía B-002 está libre, pero la placa ya tiene la reserva 01 en esa franja.
+}
