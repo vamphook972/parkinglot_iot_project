@@ -37,6 +37,11 @@ else
 fi
 
 for f in "${ARCHIVOS[@]}"; do cp "parking-app/$f" "$tmp/$f"; done
+# GitHub Pages deja los archivos 10 min en la caché del navegador: con ?v=<commit> en cada
+# script y hoja de estilos, al publicar código nuevo el navegador lo pide de nuevo.
+version="$(git rev-parse --short HEAD)"
+sed -i.bak -E "s#(src|href)=\"(estilos\.css|comun\.js|usuario\.js|config\.js)\"#\1=\"\2?v=$version\"#g" "$tmp/index.html"
+rm -f "$tmp/index.html.bak"
 touch "$tmp/.nojekyll"
 git -C "$tmp" add -A
 if git -C "$tmp" diff --cached --quiet; then
