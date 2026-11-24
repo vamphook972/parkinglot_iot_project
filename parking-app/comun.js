@@ -2,16 +2,25 @@
 // Parking IoT · utilidades compartidas por la página del usuario y la del admin
 // ==========================================================================
 
-// La página debe abrirse desde Node-RED (http://localhost:1880/app/...): así la API está en el
-// mismo origen. Desde otro origen (archivo suelto, Live Server, preview del editor) los GET
-// funcionan, pero el navegador bloquea POST/DELETE con JSON porque Node-RED no responde el
-// preflight CORS (OPTIONS). Por eso, si se abre desde otro lado, se redirige a Node-RED.
-const NODE_RED = 'http://localhost:1880';
-if (location.origin !== NODE_RED || !location.pathname.startsWith('/app')) {
+// ¿Dónde está la API de Node-RED?
+//  - Servida por Node-RED (http://localhost:1880/app/... o por el túnel /app/...): el mismo origen.
+//  - Publicada en GitHub Pages: la URL pública del túnel, definida en config.js (PARKING_API).
+//  - Abierta de otra forma (archivo suelto, Live Server…): se redirige a Node-RED local,
+//    porque desde ahí el navegador bloquearía POST/DELETE (CORS).
+const EN_PAGES = location.hostname.endsWith('github.io');
+const NODE_RED = location.pathname.startsWith('/app') ? location.origin
+    : EN_PAGES ? String(window.PARKING_API || '').replace(/\/+$/, '')
+    : 'http://localhost:1880';
+if (!EN_PAGES && !location.pathname.startsWith('/app')) {
     const archivo = location.pathname.split('/').pop();
     const destino = archivo === 'admin.html' ? 'admin.html' : 'index.html';
     location.replace(`${NODE_RED}/app/${destino}${location.hash}`);
 }
+// En la versión pública solo va la página del usuario: el panel de administración muestra
+// placas y permite cancelar cualquier reserva, así que se usa en local (localhost:1880/app/admin.html).
+document.addEventListener('DOMContentLoaded', () => {
+    if (EN_PAGES) document.querySelectorAll('a[href="admin.html"]').forEach(a => a.remove());
+});
 const ZONA = '-05:00';                       // Colombia no tiene horario de verano
 const REFRESCO_MS = 5000;
 

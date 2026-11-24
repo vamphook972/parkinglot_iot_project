@@ -6,6 +6,9 @@ de acceso por MQTT de la nota de requerimientos.
 Uso (desde la raíz del repo):
     simulation_node/.venv/bin/python node-red-flow/validar_flujo.py
 Opcional: NODE_RED=http://localhost:1880  MQTT_HOST=test.mosquitto.org
+Con adminAuth activo (contraseña del editor), la prueba de la revisión de cada minuto
+dispara el inject por la API de administración y necesita iniciar sesión:
+    NODE_RED_USER=admin NODE_RED_PASS='tu contraseña' simulation_node/.venv/bin/python node-red-flow/validar_flujo.py
 
 Deja datos de prueba en la BD (reservas RSV-*, sesiones de placas V*) en PARKING-TEST,
 igual que las pruebas de Bruno. El nodo PARKING-TEST se crea solo con el registro MQTT.
@@ -50,6 +53,24 @@ def fecha(min_desde_ahora):
     return (datetime.now(COL) + timedelta(minutes=min_desde_ahora)).strftime('%Y-%m-%dT%H:%M:%S-05:00')
 
 
+_token = None
+
+
+def token_admin():
+    """Token de la API de administración de Node-RED (adminAuth). Usuario y contraseña
+    se leen de NODE_RED_USER / NODE_RED_PASS; sin ellos se intenta sin autenticación."""
+    global _token
+    if _token is None:
+        usuario, clave = os.getenv('NODE_RED_USER'), os.getenv('NODE_RED_PASS')
+        _token = ''
+        if usuario and clave:
+            datos = urllib.parse.urlencode({'client_id': 'node-red-admin', 'grant_type': 'password',
+                                            'scope': '*', 'username': usuario, 'password': clave}).encode()
+            with urllib.request.urlopen(urllib.request.Request(BASE + '/auth/token', data=datos), timeout=15) as r:
+                _token = json.loads(r.read())['access_token']
+    return _token
+
+
 def http(metodo, ruta, cuerpo=None, content_type='application/json'):
     data = None
     if cuerpo is not None:
@@ -57,6 +78,8 @@ def http(metodo, ruta, cuerpo=None, content_type='application/json'):
     req = urllib.request.Request(BASE + ruta, data=data, method=metodo)
     if data is not None:
         req.add_header('Content-Type', content_type)
+    if ruta.startswith('/inject/') and token_admin():      # la API de administración pide login
+        req.add_header('Authorization', f'Bearer {token_admin()}')
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             raw, code, headers = r.read(), r.status, r.headers
@@ -283,7 +306,8 @@ except urllib.error.HTTPError as e:
     code, h = e.code, e.headers
 check('GET /app -> 302 a /app/index.html', code == 302 and h.get('Location') == '/app/index.html', (code, h and h.get('Location')))
 for archivo, tipo in [('index.html', 'text/html'), ('admin.html', 'text/html'), ('estilos.css', 'text/css'),
-                      ('comun.js', 'text/javascript'), ('usuario.js', 'text/javascript'), ('admin.js', 'text/javascript')]:
+                      ('comun.js', 'text/javascript'), ('usuario.js', 'text/javascript'), ('admin.js', 'text/javascript'),
+                      ('config.js', 'text/javascript')]:
     code, body, h = http('GET', f'/app/{archivo}')
     check(f'GET /app/{archivo} -> 200 {tipo}', code == 200 and h.get('Content-Type', '').startswith(tipo), (code, h.get('Content-Type')))
 code, body, _ = http('GET', '/app/flow.json')

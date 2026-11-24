@@ -2856,7 +2856,7 @@
         "z": "parqueadero_unico",
         "g": "gs_3_00",
         "name": "SQL por vencer",
-        "func": "// Reservas que hay que cerrar:\n//  1) la franja ya terminó (cualquier estado vivo), o\n//  2) SIN LLEGADA: pasaron TOLERANCIA_MIN minutos desde la hora de inicio y el carro no ha entrado\n//     (sigue 'reserved' o 'active'). Se marca 'expired' y la bahía queda libre para otros.\nconst TOLERANCIA_MIN = 15;\n\nreturn {\n    topic: `SELECT r.reservation_id, r.status, b.node_id, b.space_code,\n                   (r.ends_at > NOW()) AS sin_llegada\n            FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n            WHERE (r.status IN ('reserved', 'active', 'entered') AND r.ends_at <= NOW())\n               OR (r.status IN ('reserved', 'active')\n                   AND r.starts_at <= NOW() - INTERVAL ${TOLERANCIA_MIN} MINUTE)`,\n    payload: []\n};",
+        "func": "// Reservas que hay que cerrar:\n//  1) la franja ya terminó (cualquier estado vivo), o\n//  2) SIN LLEGADA: pasaron TOLERANCIA_MIN minutos desde la hora de inicio y el carro no ha entrado\n//     (sigue 'reserved' o 'active'). Se marca 'expired' y la bahía queda libre para otros.\nconst TOLERANCIA_MIN = 10;\n\nreturn {\n    topic: `SELECT r.reservation_id, r.status, b.node_id, b.space_code,\n                   (r.ends_at > NOW()) AS sin_llegada\n            FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n            WHERE (r.status IN ('reserved', 'active', 'entered') AND r.ends_at <= NOW())\n               OR (r.status IN ('reserved', 'active')\n                   AND r.starts_at <= NOW() - INTERVAL ${TOLERANCIA_MIN} MINUTE)`,\n    payload: []\n};",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -4902,10 +4902,10 @@
             "lo_con_http",
             "d1a0000000000006"
         ],
-        "x": 333,
+        "x": 253,
         "y": 2116,
-        "w": 1207,
-        "h": 372
+        "w": 1287,
+        "h": 395
     },
     {
         "id": "gs_2_30",
@@ -4957,9 +4957,9 @@
             "gs_2_30",
             "gs_2_40"
         ],
-        "x": 287,
+        "x": 227,
         "y": 1516,
-        "w": 2189,
+        "w": 2249,
         "h": 1345
     },
     {
@@ -4990,9 +4990,9 @@
             "v_pub_vencida",
             "lo_rev_mqtt"
         ],
-        "x": 349,
+        "x": 239,
         "y": 2982,
-        "w": 1467,
+        "w": 1577,
         "h": 242
     },
     {
@@ -5010,9 +5010,9 @@
         "nodes": [
             "gs_3_00"
         ],
-        "x": 323,
+        "x": 213,
         "y": 2956,
-        "w": 1519,
+        "w": 1629,
         "h": 294
     },
     {
@@ -5451,10 +5451,10 @@
             "lo_web_http",
             "web_nota"
         ],
-        "x": 1504,
-        "y": 2493,
-        "w": 932,
-        "h": 182
+        "x": 1584,
+        "y": 2519,
+        "w": 747,
+        "h": 172
     },
     {
         "id": "web_nota",
@@ -5463,8 +5463,8 @@
         "g": "gs_2_40",
         "name": "Abre http://localhost:1880/app  ·  admin: /app/admin.html",
         "info": "Entrega los archivos de la carpeta parking-app/ del repositorio.\nAl servir la página desde Node-RED, la página y la API comparten origen, así que\nPOST y DELETE /reservas funcionan sin preflight CORS.\n\nSi mueves el repositorio, cambia CARPETA en \"Archivo de la app\".",
-        "x": 1720,
-        "y": 2540,
+        "x": 1840,
+        "y": 2560,
         "wires": []
     },
     {
@@ -5478,8 +5478,8 @@
         "upload": false,
         "skipBodyParsing": false,
         "swaggerDoc": "",
-        "x": 1560,
-        "y": 2580,
+        "x": 1680,
+        "y": 2600,
         "wires": [
             [
                 "web_ruta"
@@ -5497,8 +5497,8 @@
         "upload": false,
         "skipBodyParsing": false,
         "swaggerDoc": "",
-        "x": 1580,
-        "y": 2630,
+        "x": 1700,
+        "y": 2650,
         "wires": [
             [
                 "web_ruta"
@@ -5511,15 +5511,15 @@
         "z": "parqueadero_unico",
         "g": "gs_2_40",
         "name": "Archivo de la app",
-        "func": "// SERVIR LA APP WEB desde Node-RED (mismo origen que la API: sin problemas de CORS)\n// Solo se entregan los archivos de esta lista; cualquier otro nombre da 404.\nconst CARPETA = '/Users/vamphook/Documents/Universidad/IOT/parkinglot_iot_project/parking-app/';\nconst ARCHIVOS = {\n    'index.html': 'text/html; charset=utf-8',\n    'admin.html': 'text/html; charset=utf-8',\n    'estilos.css': 'text/css; charset=utf-8',\n    'comun.js': 'text/javascript; charset=utf-8',\n    'usuario.js': 'text/javascript; charset=utf-8',\n    'admin.js': 'text/javascript; charset=utf-8'\n};\n\n// GET /app  ->  redirige a la página del usuario\nif (msg.req.route.path === '/app') {\n    msg.statusCode = 302;\n    msg.headers = { Location: '/app/index.html' };\n    msg.payload = '';\n    return [null, msg];\n}\n\nconst archivo = String(msg.req.params.archivo || '');\nconst tipo = ARCHIVOS[archivo];\nif (!tipo) {\n    msg.statusCode = 404;\n    msg.headers = { 'Content-Type': 'application/json; charset=utf-8' };\n    msg.payload = { error: 'NOT_FOUND', detail: 'Archivo no encontrado' };\n    return [null, msg];\n}\nmsg.filename = CARPETA + archivo;\nmsg.headers = { 'Content-Type': tipo, 'Cache-Control': 'no-cache' };\nreturn [msg, null];\n",
+        "func": "// SERVIR LA APP WEB desde Node-RED (mismo origen que la API: sin problemas de CORS)\n// Solo se entregan los archivos de esta lista; cualquier otro nombre da 404.\nconst CARPETA = '/Users/vamphook/Documents/Universidad/IOT/parkinglot_iot_project/parking-app/';\nconst ARCHIVOS = {\n    'index.html': 'text/html; charset=utf-8',\n    'admin.html': 'text/html; charset=utf-8',\n    'estilos.css': 'text/css; charset=utf-8',\n    'comun.js': 'text/javascript; charset=utf-8',\n    'usuario.js': 'text/javascript; charset=utf-8',\n    'admin.js': 'text/javascript; charset=utf-8',\n    'config.js': 'text/javascript; charset=utf-8'\n};\n\n// GET /app  ->  redirige a la página del usuario\nif (msg.req.route.path === '/app') {\n    msg.statusCode = 302;\n    msg.headers = { Location: '/app/index.html' };\n    msg.payload = '';\n    return [null, msg];\n}\n\nconst archivo = String(msg.req.params.archivo || '');\nconst tipo = ARCHIVOS[archivo];\nif (!tipo) {\n    msg.statusCode = 404;\n    msg.headers = { 'Content-Type': 'application/json; charset=utf-8' };\n    msg.payload = { error: 'NOT_FOUND', detail: 'Archivo no encontrado' };\n    return [null, msg];\n}\nmsg.filename = CARPETA + archivo;\nmsg.headers = { 'Content-Type': tipo, 'Cache-Control': 'no-cache' };\nreturn [msg, null];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1810,
-        "y": 2605,
+        "x": 1930,
+        "y": 2625,
         "wires": [
             [
                 "web_leer"
@@ -5542,8 +5542,8 @@
         "sendError": false,
         "encoding": "utf8",
         "allProps": false,
-        "x": 2010,
-        "y": 2590,
+        "x": 2130,
+        "y": 2610,
         "wires": [
             [
                 "lo_web_http"
@@ -5560,8 +5560,8 @@
         "links": [
             "li_http"
         ],
-        "x": 2170,
-        "y": 2605,
+        "x": 2290,
+        "y": 2625,
         "wires": []
     },
     {
