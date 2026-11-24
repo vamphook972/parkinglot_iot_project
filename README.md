@@ -48,7 +48,7 @@ Los tópicos MQTT siguen la forma `parqueadero/{node_id}/...`:
    SET GLOBAL time_zone = '-05:00';
    ```
 
-4. Si quieres datos de ejemplo, carga `simulation_node/historial_parking003.sql`. Trae 28 días de uso realista de PARKING-003.
+4. Si quieres datos de prueba, carga `simulation_node/historial_parking002.sql` (desde el 7 de septiembre) e `historial_parking003.sql` (desde el 5 de octubre). Los genera `generar_datos.py`, que acepta cualquier nodo y fecha de inicio. El nodo debe haberse registrado antes.
 
 ### 2. Node-RED
 
@@ -72,6 +72,12 @@ En `~/.node-red/settings.js` hay dos ajustes:
       methods: 'GET,POST,DELETE'
   },
   ```
+
+Para subir después los cambios de `flow.json` a un Node-RED que ya tiene la pestaña (pide la contraseña del editor y guarda un respaldo):
+
+```bash
+python3 node-red-flow/desplegar_flujo.py
+```
 
 ### 3. Nodo simulado
 
@@ -107,7 +113,12 @@ El script actualiza `config.js`, hace push a `main` y publica la rama `gh-pages`
 | POST | `/reservas` | Crea una reserva. |
 | GET | `/reservas`, `/reservas/:id` | Consulta reservas, por estado o por placa. |
 | DELETE | `/reservas/:id` | Cancela una reserva. |
-| GET | `/api/nodos`, `/api/resumen/:nodo`, `/api/horas/:nodo`, `/api/dias/:nodo`, `/api/categorias/:nodo` | Análisis de los datos. |
+| GET | `/api/nodos`, `/api/resumen/:nodo`, `/api/horas/:nodo`, `/api/dias/:nodo`, `/api/categorias/:nodo` | Análisis guardado (todo el historial hasta ayer). |
+| GET | `/api/analisis?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Análisis de un periodo, calculado al momento. No guarda nada. |
+
+### Limpieza y análisis
+
+Corren cada noche a la 1:00 a. m.: primero la limpieza y, si termina bien, el análisis. Node-RED tiene que estar encendido a esa hora; si no, se corren con los botones *Correr limpieza* y *Correr análisis* del flujo. El panel de administración permite ver el análisis de todo el historial o de un rango de fechas.
 
 ### Estados de una reserva
 

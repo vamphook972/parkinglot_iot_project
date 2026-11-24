@@ -525,7 +525,7 @@
         "z": "parqueadero_unico",
         "g": "gs_1_20",
         "name": "Validar y enrutar",
-        "func": "// Los mensajes de control de la cola ({flush: 1}) no traen topic\nif (!msg.topic) return null;\n\nconst partes = msg.topic.split('/');      // parqueadero/{node_id}/acceso/input\nconst nodeId = partes[1];\nconst p = msg.payload;\nmsg.node_id = nodeId;\n\n// Salidas: [placa, QR, salida, responder]\nfunction malo(motivo) {\n    node.warn(`[${msg.topic}] BAD_REQUEST: ${motivo}`);\n    const t = (p && typeof p === 'object') ? p.access_type : null;\n    msg.access_type = (t === 'entry' || t === 'exit') ? t : null;\n    msg.plate = null;\n    msg.reservation_id = null;\n    msg.reason = 'BAD_REQUEST';\n    return [null, null, null, msg];\n}\n\nif (!nodeId || nodeId.length > 30) return malo('node_id inválido en el topic');\nif (typeof p !== 'object' || p === null || Array.isArray(p)) return malo('JSON inválido');\nif (p.node_id !== nodeId) return malo('node_id del JSON no coincide con el topic');\nif (p.access_type !== 'entry' && p.access_type !== 'exit') return malo('access_type debe ser entry o exit');\n\n// Normalizar: placa en mayúsculas sin espacios ni guiones; vacíos = null\nlet plate = (p.plate === null || p.plate === undefined) ? null\n          : String(p.plate).toUpperCase().replace(/[\\s-]/g, '');\nlet rid = (p.reservation_id === null || p.reservation_id === undefined) ? null\n          : String(p.reservation_id).trim();\nif (plate === '') plate = null;\nif (rid === '') rid = null;\n\nif (plate !== null && !/^[A-Z0-9]{3,15}$/.test(plate)) return malo('placa con formato inválido');\nif (rid !== null && rid.length > 20) return malo('reservation_id demasiado largo');\n\nmsg.access_type = p.access_type;\nmsg.plate = plate;\nmsg.reservation_id = rid;\n\n// ---------- Entrada ----------\nif (p.access_type === 'entry') {\n    if ((plate === null) === (rid === null)) return malo('en la entrada va placa o reserva, una sola');\n\n    if (plate !== null) {\n        // Entrada por placa: todo lo necesario en una sola consulta\n        msg.topic = `SELECT\n            (SELECT COUNT(*) FROM nodes WHERE node_id = ?) AS node_exists,\n            (SELECT COUNT(*) FROM sessions WHERE plate = ? AND exit_at IS NULL) AS active_sessions,\n            (SELECT COUNT(*) FROM bays WHERE node_id = ?) AS total_bays,\n            (SELECT COUNT(DISTINCT r.bay_id)\n               FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n               WHERE b.node_id = ? AND r.status IN ('active', 'entered')) AS reserved_bays,\n            (SELECT COUNT(*)\n               FROM sessions s LEFT JOIN reservations r ON r.reservation_id = s.reservation_id\n               WHERE s.node_id = ? AND s.exit_at IS NULL\n                 AND (r.reservation_id IS NULL OR r.status NOT IN ('active', 'entered'))) AS walkin_sessions`;\n        msg.payload = [nodeId, plate, nodeId, nodeId, nodeId];\n        return [msg, null, null, null];\n    }\n\n    // Entrada por QR\n    msg.topic = `SELECT r.reservation_id, r.plate, r.status, b.space_code,\n            (NOW() >= r.starts_at - INTERVAL 10 MINUTE AND NOW() < r.ends_at) AS in_window,\n            (SELECT COUNT(*) FROM sessions s WHERE s.plate = r.plate AND s.exit_at IS NULL) AS active_sessions\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE r.reservation_id = ? AND b.node_id = ?`;\n    msg.payload = [rid, nodeId];\n    return [null, msg, null, null];\n}\n\n// ---------- Salida ----------\nif (plate === null) return malo('en la salida la placa es obligatoria');\nif (rid !== null) return malo('en la salida no va reserva');\n\nmsg.topic = `SELECT s.session_id, s.reservation_id,\n        r.status AS reservation_status, b.space_code\n    FROM sessions s\n    LEFT JOIN reservations r ON r.reservation_id = s.reservation_id\n    LEFT JOIN bays b ON b.bay_id = r.bay_id\n    WHERE s.plate = ? AND s.node_id = ? AND s.exit_at IS NULL\n    ORDER BY s.entry_at DESC\n    LIMIT 1`;\nmsg.payload = [plate, nodeId];\nreturn [null, null, msg, null];\n",
+        "func": "// Los mensajes de control de la cola ({flush: 1}) no traen topic\nif (!msg.topic) return null;\n\nconst partes = msg.topic.split('/');      // parqueadero/{node_id}/acceso/input\nconst nodeId = partes[1];\nconst p = msg.payload;\nmsg.node_id = nodeId;\n\n// Salidas: [placa, QR, salida, responder]\nfunction malo(motivo) {\n    node.warn(`[${msg.topic}] BAD_REQUEST: ${motivo}`);\n    const t = (p && typeof p === 'object') ? p.access_type : null;\n    msg.access_type = (t === 'entry' || t === 'exit') ? t : null;\n    msg.plate = null;\n    msg.reservation_id = null;\n    msg.reason = 'BAD_REQUEST';\n    return [null, null, null, msg];\n}\n\nif (!nodeId || nodeId.length > 30) return malo('node_id inválido en el topic');\nif (typeof p !== 'object' || p === null || Array.isArray(p)) return malo('JSON inválido');\nif (p.node_id !== nodeId) return malo('node_id del JSON no coincide con el topic');\nif (p.access_type !== 'entry' && p.access_type !== 'exit') return malo('access_type debe ser entry o exit');\n\nfor (const k of ['plate', 'reservation_id']) {\n    if (p[k] !== null && p[k] !== undefined && typeof p[k] !== 'string') return malo(k + ' debe ser texto');\n}\n\n// Normalizar: placa en mayúsculas sin espacios ni guiones; vacíos = null\nlet plate = (p.plate === null || p.plate === undefined) ? null\n          : String(p.plate).toUpperCase().replace(/[\\s-]/g, '');\nlet rid = (p.reservation_id === null || p.reservation_id === undefined) ? null\n          : String(p.reservation_id).trim();\nif (plate === '') plate = null;\nif (rid === '') rid = null;\n\nif (plate !== null && !/^[A-Z0-9]{3,15}$/.test(plate)) return malo('placa con formato inválido');\nif (rid !== null && rid.length > 20) return malo('reservation_id demasiado largo');\n\nmsg.access_type = p.access_type;\nmsg.plate = plate;\nmsg.reservation_id = rid;\n\n// ---------- Entrada ----------\nif (p.access_type === 'entry') {\n    if ((plate === null) === (rid === null)) return malo('en la entrada va placa o reserva, una sola');\n\n    if (plate !== null) {\n        // Entrada por placa: todo lo necesario en una sola consulta\n        msg.topic = `SELECT\n            (SELECT COUNT(*) FROM nodes WHERE node_id = ?) AS node_exists,\n            (SELECT COUNT(*) FROM sessions WHERE plate = ? AND exit_at IS NULL) AS active_sessions,\n            (SELECT COUNT(*) FROM bays WHERE node_id = ?) AS total_bays,\n            (SELECT COUNT(DISTINCT r.bay_id)\n               FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n               WHERE b.node_id = ? AND r.status IN ('active', 'entered')) AS reserved_bays,\n            (SELECT COUNT(*)\n               FROM sessions s LEFT JOIN reservations r ON r.reservation_id = s.reservation_id\n               WHERE s.node_id = ? AND s.exit_at IS NULL\n                 AND (r.reservation_id IS NULL OR r.status NOT IN ('active', 'entered'))) AS walkin_sessions`;\n        msg.payload = [nodeId, plate, nodeId, nodeId, nodeId];\n        return [msg, null, null, null];\n    }\n\n    // Entrada por QR\n    msg.topic = `SELECT r.reservation_id, r.plate, r.status, b.space_code,\n            (NOW() >= r.starts_at - INTERVAL 10 MINUTE AND NOW() < r.ends_at) AS in_window,\n            (SELECT COUNT(*) FROM sessions s WHERE s.plate = r.plate AND s.exit_at IS NULL) AS active_sessions\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE r.reservation_id = ? AND b.node_id = ?`;\n    msg.payload = [rid, nodeId];\n    return [null, msg, null, null];\n}\n\n// ---------- Salida ----------\nif (plate === null) return malo('en la salida la placa es obligatoria');\nif (rid !== null) return malo('en la salida no va reserva');\n\nmsg.topic = `SELECT s.session_id, s.reservation_id,\n        r.status AS reservation_status, b.space_code,\n                   (SELECT COUNT(*) FROM reservations o\n                     WHERE o.bay_id = r.bay_id AND o.reservation_id <> r.reservation_id AND o.ends_at > NOW()\n                       AND (o.status = 'entered' OR (o.status IN ('reserved', 'active')\n                            AND o.starts_at <= NOW() + INTERVAL 10 MINUTE\n                            AND o.starts_at > NOW() - INTERVAL 10 MINUTE))) AS otra_vigente\n    FROM sessions s\n    LEFT JOIN reservations r ON r.reservation_id = s.reservation_id\n    LEFT JOIN bays b ON b.bay_id = r.bay_id\n    WHERE s.plate = ? AND s.node_id = ? AND s.exit_at IS NULL\n    ORDER BY s.entry_at DESC\n    LIMIT 1`;\nmsg.payload = [plate, nodeId];\nreturn [null, null, msg, null];\n",
         "outputs": 4,
         "timeout": 0,
         "noerr": 0,
@@ -867,7 +867,7 @@
         "z": "parqueadero_unico",
         "g": "gs_1_20",
         "name": "Apagar amarillo",
-        "func": "// Si la reserva sí pasó a 'completed', se apaga el amarillo\nif (msg.payload.affectedRows > 0) {\n    msg.reserva = { space_id: msg.session.space_code, reserved: false };\n}\nreturn msg;\n",
+        "func": "// Si la reserva sí pasó a 'completed', se apaga el amarillo\n// (salvo que la bahía ya esté apartada para la siguiente reserva)\nif (msg.payload.affectedRows > 0 && Number(msg.session.otra_vigente) === 0) {\n    msg.reserva = { space_id: msg.session.space_code, reserved: false };\n}\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -1504,7 +1504,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_10",
         "name": "Validar reserva",
-        "func": "// Salida 1: consultar BD | Salida 2: responder (error)\nconst p = msg.payload;\n\nfunction error(code, err, detail) {\n    msg.http = { code, body: { error: err, detail } };\n    return [null, msg];\n}\n\n// ISO 8601 con zona (ej. 2026-11-10T08:00:00-05:00) -> 'YYYY-MM-DD HH:MM:SS' en hora de Colombia\nfunction aMysql(iso) {\n    if (!/(Z|[+-]\\d{2}:\\d{2})$/.test(iso)) return null;\n    const ms = Date.parse(iso);\n    if (isNaN(ms)) return null;\n    return new Date(ms - 5 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');\n}\n\nif (typeof p !== 'object' || p === null || Array.isArray(p)) {\n    return error(400, 'BAD_REQUEST', 'El cuerpo debe ser JSON (Content-Type: application/json)');\n}\n\nconst campos = ['reservation_id', 'node_id', 'space_id', 'plate', 'starts_at', 'ends_at'];\nconst faltan = campos.filter(k => p[k] === undefined || p[k] === null || String(p[k]).trim() === '');\nif (faltan.length) return error(400, 'BAD_REQUEST', `Faltan campos: ${faltan.join(', ')}`);\n\nconst rid = String(p.reservation_id).trim();\nconst nodeId = String(p.node_id).trim();\nconst space = String(p.space_id).trim();\nconst plate = String(p.plate).toUpperCase().replace(/[\\s-]/g, '');\n\nif (rid.length > 20) return error(400, 'BAD_REQUEST', 'reservation_id de máximo 20 caracteres');\nif (nodeId.length > 30 || space.length > 20) return error(400, 'BAD_REQUEST', 'node_id o space_id demasiado largo');\nif (!/^[A-Z0-9]{3,15}$/.test(plate)) return error(400, 'BAD_REQUEST', 'Placa con formato inválido');\n\nconst ini = aMysql(String(p.starts_at).trim());\nconst fin = aMysql(String(p.ends_at).trim());\nif (!ini || !fin) return error(400, 'BAD_REQUEST', 'Fechas en ISO 8601 con zona, ej. 2026-11-10T08:00:00-05:00');\nif (fin <= ini) return error(400, 'BAD_REQUEST', 'ends_at debe ser posterior a starts_at');\n\nmsg.reserva = { rid, nodeId, space, plate, ini, fin };\n\n// Todo lo que hay que verificar, en una sola consulta (la hora la pone MySQL)\nmsg.topic = `SELECT\n    (SELECT bay_id FROM bays WHERE node_id = ? AND space_code = ?) AS bay_id,\n    (SELECT COUNT(*) FROM reservations WHERE reservation_id = ?) AS id_exists,\n    (CAST(? AS DATETIME) > NOW()) AS ends_future,\n    (CAST(? AS DATETIME) <= NOW() + INTERVAL 10 MINUTE) AS starts_soon,\n    (SELECT COUNT(*) FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n       WHERE b.node_id = ? AND b.space_code = ?\n         AND r.status IN ('reserved', 'active', 'entered')\n         AND r.starts_at < CAST(? AS DATETIME) AND r.ends_at > CAST(? AS DATETIME)) AS bay_overlaps,\n    (SELECT COUNT(*) FROM reservations\n       WHERE plate = ?\n         AND status IN ('reserved', 'active', 'entered')\n         AND starts_at < CAST(? AS DATETIME) AND ends_at > CAST(? AS DATETIME)) AS plate_overlaps,\n    (SELECT (b.sensor_status = 1 OR EXISTS (SELECT 1 FROM reservations r\n                WHERE r.bay_id = b.bay_id AND r.status IN ('active', 'entered')))\n       FROM bays b WHERE b.node_id = ? AND b.space_code = ?) AS bay_busy_now`;\nmsg.payload = [nodeId, space, rid, fin, ini, nodeId, space, fin, ini, plate, fin, ini, nodeId, space];\nreturn [msg, null];\n",
+        "func": "// Salida 1: consultar BD | Salida 2: responder (error)\nconst p = msg.payload;\n\nfunction error(code, err, detail) {\n    msg.http = { code, body: { error: err, detail } };\n    return [null, msg];\n}\n\n// ISO 8601 con zona (ej. 2026-11-10T08:00:00-05:00) -> 'YYYY-MM-DD HH:MM:SS' en hora de Colombia\nfunction aMysql(iso) {\n    const m = /^(\\d{4}-\\d{2}-\\d{2})T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$/.exec(iso);\n    if (!m) return null;\n    const dia = new Date(m[1] + 'T00:00:00Z');                       // 31 de febrero no existe\n    if (isNaN(dia) || dia.toISOString().slice(0, 10) !== m[1] || m[1] < '2000') return null;\n    const ms = Date.parse(iso);\n    if (isNaN(ms)) return null;\n    return new Date(ms - 5 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');\n}\n\nif (typeof p !== 'object' || p === null || Array.isArray(p)) {\n    return error(400, 'BAD_REQUEST', 'El cuerpo debe ser JSON (Content-Type: application/json)');\n}\n\nconst campos = ['reservation_id', 'node_id', 'space_id', 'plate', 'starts_at', 'ends_at'];\nconst faltan = campos.filter(k => p[k] === undefined || p[k] === null || String(p[k]).trim() === '');\nif (faltan.length) return error(400, 'BAD_REQUEST', `Faltan campos: ${faltan.join(', ')}`);\n\nconst rid = String(p.reservation_id).trim();\nconst nodeId = String(p.node_id).trim();\nconst space = String(p.space_id).trim();\nconst plate = String(p.plate).toUpperCase().replace(/[\\s-]/g, '');\n\nif (rid.length > 20) return error(400, 'BAD_REQUEST', 'reservation_id de máximo 20 caracteres');\nif (nodeId.length > 30 || space.length > 20) return error(400, 'BAD_REQUEST', 'node_id o space_id demasiado largo');\nif (!/^[A-Z0-9]{3,15}$/.test(plate)) return error(400, 'BAD_REQUEST', 'Placa con formato inválido');\n\nconst ini = aMysql(String(p.starts_at).trim());\nconst fin = aMysql(String(p.ends_at).trim());\nif (!ini || !fin) return error(400, 'BAD_REQUEST', 'Fechas en ISO 8601 con zona, ej. 2026-11-10T08:00:00-05:00');\nif (fin <= ini) return error(400, 'BAD_REQUEST', 'ends_at debe ser posterior a starts_at');\n\nmsg.reserva = { rid, nodeId, space, plate, ini, fin };\n\n// Candado: verificar e insertar son dos consultas. Mientras una reserva está en ese tramo, otra\n// para la misma bahía, placa o código se rechaza (si no, las dos pasarían la verificación).\nconst candados = flow.get('candadosReserva') || {};\nconst ahora = Date.now();\nfor (const k in candados) if (ahora - candados[k] > 10000) delete candados[k];   // por si algo no lo soltó\nconst claves = [`b:${nodeId}/${space}`, `p:${plate}`, `r:${rid}`].map(k => k.toLowerCase());\nconst ocupado = claves.find(k => candados[k]);\nif (ocupado) {\n    const cod = { b: 'OVERLAP', p: 'PLATE_OVERLAP', r: 'DUPLICATE_ID' }[ocupado[0]];\n    return error(409, cod, 'Otra reserva se está creando en este momento; intenta de nuevo');\n}\nclaves.forEach(k => { candados[k] = ahora; });\nflow.set('candadosReserva', candados);\nmsg.candados = claves;\n\n// Todo lo que hay que verificar, en una sola consulta (la hora la pone MySQL)\nmsg.topic = `SELECT\n    (SELECT bay_id FROM bays WHERE node_id = ? AND space_code = ?) AS bay_id,\n    (SELECT node_id FROM bays WHERE node_id = ? AND space_code = ?) AS node_real,\n    (SELECT space_code FROM bays WHERE node_id = ? AND space_code = ?) AS space_real,\n    (SELECT COUNT(*) FROM reservations WHERE reservation_id = ?) AS id_exists,\n    (CAST(? AS DATETIME) > NOW()) AS ends_future,\n    (CAST(? AS DATETIME) <= NOW() + INTERVAL 10 MINUTE) AS starts_soon,\n    (SELECT COUNT(*) FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n       WHERE b.node_id = ? AND b.space_code = ?\n         AND r.status IN ('reserved', 'active', 'entered')\n         AND r.starts_at < CAST(? AS DATETIME) AND r.ends_at > CAST(? AS DATETIME)) AS bay_overlaps,\n    (SELECT COUNT(*) FROM reservations\n       WHERE plate = ?\n         AND status IN ('reserved', 'active', 'entered')\n         AND starts_at < CAST(? AS DATETIME) AND ends_at > CAST(? AS DATETIME)) AS plate_overlaps,\n    (SELECT (b.sensor_status = 1 OR EXISTS (SELECT 1 FROM reservations r\n                WHERE r.bay_id = b.bay_id AND r.status IN ('active', 'entered')))\n       FROM bays b WHERE b.node_id = ? AND b.space_code = ?) AS bay_busy_now`;\nmsg.payload = [nodeId, space, nodeId, space, nodeId, space, rid, fin, ini, nodeId, space, fin, ini, plate, fin, ini, nodeId, space];\nreturn [msg, null];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -1543,7 +1543,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_10",
         "name": "Decidir creación",
-        "func": "// Salida 1: insertar | Salida 2: responder (error)\nconst f = msg.payload[0];\nconst r = msg.reserva;\n\nfunction error(code, err, detail) {\n    msg.http = { code, body: { error: err, detail } };\n    return [null, msg];\n}\n\nif (!f || f.bay_id === null) {\n    return error(404, 'INVALID_BAY', `La bahía ${r.space} no existe en el nodo ${r.nodeId}`);\n}\nif (Number(f.id_exists) > 0) {\n    return error(409, 'DUPLICATE_ID', `Ya existe una reserva con el código ${r.rid}`);\n}\nif (Number(f.ends_future) !== 1) {\n    return error(400, 'BAD_REQUEST', 'La franja ya terminó (ends_at en el pasado)');\n}\nif (Number(f.bay_overlaps) > 0) {\n    return error(409, 'OVERLAP', 'La bahía ya tiene una reserva que se cruza con esa franja');\n}\n// Si empieza ya (<= 10 min), la bahía además tiene que estar libre AHORA:\n// sin carro (sensor) y sin otra reserva vigente, aunque sus horarios no se crucen\nif (Number(f.starts_soon) === 1 && Number(f.bay_busy_now) === 1) {\n    return error(409, 'OVERLAP', 'La bahía está ocupada o apartada en este momento');\n}\nif (Number(f.plate_overlaps) > 0) {\n    return error(409, 'PLATE_OVERLAP', 'La placa ya tiene otra reserva que se cruza con esa franja');\n}\n\n// Si empieza en 10 minutos o menos, nace vigente\nr.status = Number(f.starts_soon) === 1 ? 'active' : 'reserved';\n\nmsg.topic = `INSERT INTO reservations (reservation_id, bay_id, plate, starts_at, ends_at, status)\n             VALUES (?, ?, ?, ?, ?, ?)`;\nmsg.payload = [r.rid, f.bay_id, r.plate, r.ini, r.fin, r.status];\nreturn [msg, null];\n",
+        "func": "// Salida 1: insertar | Salida 2: responder (error)\nconst f = msg.payload[0];\nconst r = msg.reserva;\n\nfunction error(code, err, detail) {\n    msg.http = { code, body: { error: err, detail } };\n    return [null, msg];\n}\n\nif (!f || f.bay_id === null) {\n    return error(404, 'INVALID_BAY', `La bahía ${r.space} no existe en el nodo ${r.nodeId}`);\n}\nr.nodeId = f.node_real;\nr.space = f.space_real;\nif (Number(f.id_exists) > 0) {\n    return error(409, 'DUPLICATE_ID', `Ya existe una reserva con el código ${r.rid}`);\n}\nif (Number(f.ends_future) !== 1) {\n    return error(400, 'BAD_REQUEST', 'La franja ya terminó (ends_at en el pasado)');\n}\nif (Number(f.bay_overlaps) > 0) {\n    return error(409, 'OVERLAP', 'La bahía ya tiene una reserva que se cruza con esa franja');\n}\n// Si empieza ya (<= 10 min), la bahía además tiene que estar libre AHORA:\n// sin carro (sensor) y sin otra reserva vigente, aunque sus horarios no se crucen\nif (Number(f.starts_soon) === 1 && Number(f.bay_busy_now) === 1) {\n    return error(409, 'OVERLAP', 'La bahía está ocupada o apartada en este momento');\n}\nif (Number(f.plate_overlaps) > 0) {\n    return error(409, 'PLATE_OVERLAP', 'La placa ya tiene otra reserva que se cruza con esa franja');\n}\n\n// Si empieza en 10 minutos o menos, nace vigente\nr.status = Number(f.starts_soon) === 1 ? 'active' : 'reserved';\n\nmsg.topic = `INSERT INTO reservations (reservation_id, bay_id, plate, starts_at, ends_at, status)\n             VALUES (?, ?, ?, ?, ?, ?)`;\nmsg.payload = [r.rid, f.bay_id, r.plate, r.ini, r.fin, r.status];\nreturn [msg, null];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -1614,7 +1614,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_10",
         "name": "Validar cancelación",
-        "func": "// Salida 1: consultar BD | Salida 2: responder (error)\nconst rid = String((msg.req.params && msg.req.params.id) || '').trim();\n\nif (!rid || rid.length > 20) {\n    msg.http = { code: 400, body: { error: 'BAD_REQUEST', detail: 'reservation_id inválido' } };\n    return [null, msg];\n}\n\nmsg.reserva = { rid };\nmsg.topic = `SELECT r.status, b.node_id, b.space_code\n             FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n             WHERE r.reservation_id = ?`;\nmsg.payload = [rid];\nreturn [msg, null];\n",
+        "func": "// Salida 1: consultar BD | Salida 2: responder (error)\nconst rid = String((msg.req.params && msg.req.params.id) || '').trim();\n\nif (!rid || rid.length > 20) {\n    msg.http = { code: 400, body: { error: 'BAD_REQUEST', detail: 'reservation_id inválido' } };\n    return [null, msg];\n}\n\nmsg.reserva = { rid };\nmsg.topic = `SELECT r.status, b.node_id, b.space_code,\n                   (SELECT COUNT(*) FROM reservations o\n                     WHERE o.bay_id = r.bay_id AND o.reservation_id <> r.reservation_id AND o.ends_at > NOW()\n                       AND (o.status = 'entered' OR (o.status IN ('reserved', 'active')\n                            AND o.starts_at <= NOW() + INTERVAL 10 MINUTE\n                            AND o.starts_at > NOW() - INTERVAL 10 MINUTE))) AS otra_vigente\n             FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n             WHERE r.reservation_id = ?`;\nmsg.payload = [rid];\nreturn [msg, null];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -1653,7 +1653,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_10",
         "name": "Decidir cancelación",
-        "func": "// Salida 1: actualizar | Salida 2: responder (error)\nconst f = msg.payload[0];\nconst r = msg.reserva;\n\nif (!f) {\n    msg.http = { code: 404, body: { error: 'NOT_FOUND', detail: `No existe la reserva ${r.rid}` } };\n    return [null, msg];\n}\nif (!['reserved', 'active'].includes(f.status)) {\n    msg.http = { code: 409, body: { error: 'NOT_CANCELLABLE', detail: `La reserva está en estado ${f.status}` } };\n    return [null, msg];\n}\n\nr.prev = f.status;\nr.nodeId = f.node_id;\nr.space = f.space_code;\n\n// \"AND status = ?\" evita pisar un cambio que haya hecho la revisión de cada minuto\nmsg.topic = `UPDATE reservations SET status = 'cancelled'\n             WHERE reservation_id = ? AND status = ?`;\nmsg.payload = [r.rid, f.status];\nreturn [msg, null];\n",
+        "func": "// Salida 1: actualizar | Salida 2: responder (error)\nconst f = msg.payload[0];\nconst r = msg.reserva;\n\nif (!f) {\n    msg.http = { code: 404, body: { error: 'NOT_FOUND', detail: `No existe la reserva ${r.rid}` } };\n    return [null, msg];\n}\nif (!['reserved', 'active'].includes(f.status)) {\n    msg.http = { code: 409, body: { error: 'NOT_CANCELLABLE', detail: `La reserva está en estado ${f.status}` } };\n    return [null, msg];\n}\n\nr.prev = f.status;\nr.otra = Number(f.otra_vigente) > 0;\nr.nodeId = f.node_id;\nr.space = f.space_code;\n\n// \"AND status = ?\" evita pisar un cambio que haya hecho la revisión de cada minuto\nmsg.topic = `UPDATE reservations SET status = 'cancelled'\n             WHERE reservation_id = ? AND status = ?`;\nmsg.payload = [r.rid, f.status];\nreturn [msg, null];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -1692,7 +1692,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_10",
         "name": "Cancelada (¿apagar?)",
-        "func": "const r = msg.reserva;\n\nif (msg.payload.affectedRows === 0) {\n    msg.http = { code: 409, body: { error: 'NOT_CANCELLABLE', detail: 'La reserva cambió de estado; intenta de nuevo' } };\n    return msg;\n}\n\nmsg.http = { code: 200, body: { reservation_id: r.rid, status: 'cancelled' } };\n\n// Solo se apaga el amarillo si el nodo ya lo tenía encendido\nif (r.prev === 'active') {\n    msg.mqtt = [{\n        topic: `parqueadero/${r.nodeId}/bahia/reserva`,\n        payload: { node_id: r.nodeId, space_id: r.space, reserved: false }\n    }];\n}\nreturn msg;\n",
+        "func": "const r = msg.reserva;\n\nif (msg.payload.affectedRows === 0) {\n    msg.http = { code: 409, body: { error: 'NOT_CANCELLABLE', detail: 'La reserva cambió de estado; intenta de nuevo' } };\n    return msg;\n}\n\nmsg.http = { code: 200, body: { reservation_id: r.rid, status: 'cancelled' } };\n\n// Solo se apaga el amarillo si el nodo ya lo tenía encendido\n// (y la bahía no está apartada para otra reserva)\nif (r.prev === 'active' && !r.otra) {\n    msg.mqtt = [{\n        topic: `parqueadero/${r.nodeId}/bahia/reserva`,\n        payload: { node_id: r.nodeId, space_id: r.space, reserved: false }\n    }];\n}\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -1713,7 +1713,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_10",
         "name": "Responder reserva",
-        "func": "// Salida 1: respuesta HTTP | Salida 2: mensajes MQTT (bahia/reserva)\nconst mqtt = Array.isArray(msg.mqtt) ? msg.mqtt : [];\n\nmsg.statusCode = msg.http.code;\nmsg.payload = msg.http.body;\n\nconst ok = msg.http.code < 300;\nnode.status({\n    fill: ok ? 'green' : 'red', shape: 'dot',\n    text: `${msg.req.method} ${msg.http.code} ${msg.http.body.error || msg.http.body.status}`\n});\n\nreturn [msg, mqtt];\n",
+        "func": "// Salida 1: respuesta HTTP | Salida 2: mensajes MQTT (bahia/reserva)\n// Suelta el candado de la reserva, si lo tenía\nif (msg.candados) {\n    const c = flow.get('candadosReserva') || {};\n    msg.candados.forEach(k => delete c[k]);\n    flow.set('candadosReserva', c);\n    delete msg.candados;\n}\nconst mqtt = Array.isArray(msg.mqtt) ? msg.mqtt : [];\n\nmsg.statusCode = msg.http.code;\nmsg.payload = msg.http.body;\n\nconst ok = msg.http.code < 300;\nnode.status({\n    fill: ok ? 'green' : 'red', shape: 'dot',\n    text: `${msg.req.method} ${msg.http.code} ${msg.http.body.error || msg.http.body.status}`\n});\n\nreturn [msg, mqtt];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -1798,7 +1798,10 @@
             "web_in_arch",
             "web_ruta",
             "web_leer",
-            "d1a0000000000006"
+            "d1a0000000000006",
+            "rango_in",
+            "rango_val",
+            "rango_lo"
         ],
         "uncaught": false,
         "x": 429,
@@ -1815,7 +1818,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_00",
         "name": "Responder 500",
-        "func": "// Cualquier fallo de la API (p. ej. MySQL caído) responde 500 en vez de dejar la petición colgada\nconst origen = (msg.error && msg.error.source) || {};\nnode.warn(`Error en \"${origen.name || origen.type || 'nodo'}\": ${msg.error ? msg.error.message : 'desconocido'}`);\n\n// Sin petición HTTP pendiente (p. ej. falló un nodo de prueba) o falló la propia respuesta: no se reintenta\nif (!msg.res || origen.type === 'http response') return null;\n\nmsg.statusCode = 500;\nmsg.headers = { 'Content-Type': 'application/json; charset=utf-8' };\nmsg.payload = { error: 'SERVER_ERROR', detail: 'No se pudo completar la petición' };\nreturn msg;\n",
+        "func": "// Cualquier fallo de la API (p. ej. MySQL caído) responde 500 en vez de dejar la petición colgada\n// Suelta el candado de la reserva, si lo tenía\nif (msg.candados) {\n    const c = flow.get('candadosReserva') || {};\n    msg.candados.forEach(k => delete c[k]);\n    flow.set('candadosReserva', c);\n    delete msg.candados;\n}\nconst origen = (msg.error && msg.error.source) || {};\nnode.warn(`Error en \"${origen.name || origen.type || 'nodo'}\": ${msg.error ? msg.error.message : 'desconocido'}`);\n\n// Sin petición HTTP pendiente (p. ej. falló un nodo de prueba) o falló la propia respuesta: no se reintenta\nif (!msg.res || origen.type === 'http response') return null;\n\nmsg.statusCode = 500;\nmsg.headers = { 'Content-Type': 'application/json; charset=utf-8' };\nmsg.payload = { error: 'SERVER_ERROR', detail: 'No se pudo completar la petición' };\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -2350,7 +2353,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_20",
         "name": "Armar consulta (app)",
-        "func": "// ARMAR LA CONSULTA (solo lectura, no pasa por la cola)\n// Salida 1 -> MySQL · Salida 2 -> respuesta de error (400)\nconst ruta = msg.req.route.path;\nconst q = msg.req.query || {};\nconst prm = msg.req.params || {};\nconst CORS = { 'Access-Control-Allow-Origin': '*' };\nconst F = \"'%Y-%m-%dT%H:%i:%s-05:00'\";   // fechas de salida: ISO con zona, igual que en el POST\n\nfunction error(code, err, detail) {\n    msg.headers = CORS;\n    msg.statusCode = code;\n    msg.payload = { error: err, detail };\n    return [null, msg];\n}\n// ISO 8601 con zona -> 'YYYY-MM-DD HH:MM:SS' en hora de Colombia (igual que POST /reservas)\nfunction aMysql(iso) {\n    if (!/(Z|[+-]\\d{2}:\\d{2})$/.test(iso)) return null;\n    const ms = Date.parse(iso);\n    if (isNaN(ms)) return null;\n    return new Date(ms - 5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');\n}\n// Bahía con reserva vigente = amarillo encendido\nconst VIGENTE = `EXISTS (SELECT 1 FROM reservations r\n                 WHERE r.bay_id = b.bay_id AND r.status IN ('active', 'entered'))`;\n\n// ---------- GET /parqueaderos ----------\nif (ruta === '/parqueaderos') {\n    msg.topic = `SELECT n.node_id,\n          DATE_FORMAT(n.last_connection, ${F}) AS last_connection,\n          COUNT(x.bay_id) AS total_bays,\n          COALESCE(SUM(x.libre), 0) AS free_now\n        FROM nodes n\n        LEFT JOIN (\n            SELECT b.bay_id, b.node_id,\n                   (b.sensor_status = 0 AND NOT ${VIGENTE}) AS libre\n            FROM bays b\n        ) x ON x.node_id = n.node_id\n        GROUP BY n.node_id, n.last_connection\n        ORDER BY n.node_id`;\n    msg.payload = [];\n    return [msg, null];\n}\n\n// ---------- GET /parqueaderos/:node_id/bahias?desde=&hasta= ----------\nif (ruta === '/parqueaderos/:node_id/bahias') {\n    const nodeId = String(prm.node_id || '').trim();\n    if (!nodeId || nodeId.length > 30) return error(400, 'BAD_REQUEST', 'node_id inválido');\n\n    const hayDesde = q.desde !== undefined && String(q.desde).trim() !== '';\n    const hayHasta = q.hasta !== undefined && String(q.hasta).trim() !== '';\n    if (hayDesde !== hayHasta) return error(400, 'BAD_REQUEST', 'Envía desde y hasta juntos, o ninguno');\n\n    let disponible, params;\n    if (hayDesde) {\n        // Con franja: disponible = ninguna reserva (viva) se cruza con esa franja.\n        // Si la franja empieza ya (en 10 min o menos, igual que la regla de \"active\" del POST),\n        // la bahía además tiene que estar libre AHORA: sin carro y sin reserva vigente.\n        // Para franjas más adelante el sensor no cuenta: una bahía ocupada ahora puede estar libre mañana.\n        const ini = aMysql(String(q.desde).trim());\n        const fin = aMysql(String(q.hasta).trim());\n        if (!ini || !fin) return error(400, 'BAD_REQUEST', 'Fechas en ISO 8601 con zona, ej. 2026-11-22T08:00:00-05:00 (codificadas en la URL)');\n        if (fin <= ini) return error(400, 'BAD_REQUEST', 'hasta debe ser posterior a desde');\n        disponible = `(NOT EXISTS (SELECT 1 FROM reservations r\n                        WHERE r.bay_id = b.bay_id\n                          AND r.status IN ('reserved', 'active', 'entered')\n                          AND r.starts_at < CAST(? AS DATETIME) AND r.ends_at > CAST(? AS DATETIME))\n                      AND (CAST(? AS DATETIME) > NOW() + INTERVAL 10 MINUTE\n                           OR (b.sensor_status = 0 AND NOT ${VIGENTE})))`;\n        params = [fin, ini, ini, nodeId];\n    } else {\n        // Sin franja: disponible = libre ahora (sin carro y sin reserva vigente)\n        disponible = `(b.sensor_status = 0 AND NOT ${VIGENTE})`;\n        params = [nodeId];\n    }\n    msg.topic = `SELECT b.space_code AS space_id, b.sensor_status,\n          ${VIGENTE} AS reserved_now,\n          ${disponible} AS available\n        FROM bays b WHERE b.node_id = ? ORDER BY b.space_code`;\n    msg.payload = params;\n    return [msg, null];\n}\n\n// ---------- GET /parqueaderos/:node_id/agenda?fecha=YYYY-MM-DD ----------\n// Línea de tiempo de la página: reservas vivas que tocan ese día (hora de Colombia).\n// Sin placa ni código: la página es pública y solo necesita saber qué franjas están tomadas.\nif (ruta === '/parqueaderos/:node_id/agenda') {\n    const nodeId = String(prm.node_id || '').trim();\n    if (!nodeId || nodeId.length > 30) return error(400, 'BAD_REQUEST', 'node_id inválido');\n    const f = String(q.fecha || '').trim();\n    const d = new Date(f + 'T00:00:00Z');\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(f) || isNaN(d) || d.toISOString().slice(0, 10) !== f) {\n        return error(400, 'BAD_REQUEST', 'fecha debe ser YYYY-MM-DD');\n    }\n    msg.topic = `SELECT b.space_code AS space_id, r.status,\n          DATE_FORMAT(r.starts_at, ${F}) AS starts_at,\n          DATE_FORMAT(r.ends_at, ${F}) AS ends_at\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE b.node_id = ?\n          AND r.status IN ('reserved', 'active', 'entered')\n          AND r.starts_at < CAST(? AS DATE) + INTERVAL 1 DAY\n          AND r.ends_at > CAST(? AS DATE)\n        ORDER BY b.space_code, r.starts_at`;\n    msg.payload = [nodeId, f, f];\n    return [msg, null];\n}\n\n// ---------- GET /reservas/:id ----------\nif (ruta === '/reservas/:id') {\n    const rid = String(prm.id || '').trim();\n    if (!rid || rid.length > 20) return error(400, 'BAD_REQUEST', 'reservation_id inválido');\n    msg.topic = `SELECT r.reservation_id, b.node_id, b.space_code AS space_id, r.plate, r.status,\n          DATE_FORMAT(r.starts_at, ${F}) AS starts_at,\n          DATE_FORMAT(r.ends_at, ${F}) AS ends_at,\n          DATE_FORMAT(r.created_at, ${F}) AS created_at\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE r.reservation_id = ?`;\n    msg.payload = [rid];\n    return [msg, null];\n}\n\n// ---------- GET /reservas?placa=&node_id=&status=&fecha=&limit= ----------\nif (ruta === '/reservas') {\n    const where = [], params = [];\n\n    if (q.placa) {\n        const placa = String(q.placa).toUpperCase().replace(/[\\s-]/g, '');\n        if (!/^[A-Z0-9]{3,15}$/.test(placa)) return error(400, 'BAD_REQUEST', 'Placa con formato inválido');\n        where.push('r.plate = ?'); params.push(placa);\n    }\n    if (q.node_id) {\n        const n = String(q.node_id).trim();\n        if (!n || n.length > 30) return error(400, 'BAD_REQUEST', 'node_id inválido');\n        where.push('b.node_id = ?'); params.push(n);\n    }\n    if (q.status) {\n        const s = String(q.status).trim();\n        if (!['reserved', 'active', 'entered', 'completed', 'expired', 'cancelled'].includes(s)) {\n            return error(400, 'BAD_REQUEST', 'status debe ser reserved, active, entered, completed, expired o cancelled');\n        }\n        where.push('r.status = ?'); params.push(s);\n    }\n    if (q.fecha) {\n        // reservas que EMPIEZAN ese día (hora de Colombia)\n        const f = String(q.fecha).trim();\n        const d = new Date(f + 'T00:00:00Z');\n        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(f) || isNaN(d) || d.toISOString().slice(0, 10) !== f) {\n            return error(400, 'BAD_REQUEST', 'fecha debe ser YYYY-MM-DD');\n        }\n        where.push('r.starts_at >= CAST(? AS DATE) AND r.starts_at < CAST(? AS DATE) + INTERVAL 1 DAY');\n        params.push(f, f);\n    }\n    // Sin login, un listado sin filtros mostraría todas las placas: se exige al menos un filtro\n    if (where.length === 0) {\n        return error(400, 'BAD_REQUEST', 'Indica al menos un filtro: placa, node_id, status o fecha');\n    }\n    const limite = Math.min(Math.max(parseInt(q.limit, 10) || 100, 1), 500);   // entero validado\n\n    msg.topic = `SELECT r.reservation_id, b.node_id, b.space_code AS space_id, r.plate, r.status,\n          DATE_FORMAT(r.starts_at, ${F}) AS starts_at,\n          DATE_FORMAT(r.ends_at, ${F}) AS ends_at,\n          DATE_FORMAT(r.created_at, ${F}) AS created_at\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE ${where.join(' AND ')}\n        ORDER BY r.starts_at DESC\n        LIMIT ${limite}`;\n    msg.payload = params;\n    return [msg, null];\n}\n\nreturn error(404, 'NOT_FOUND', 'Ruta no reconocida');\n",
+        "func": "// ARMAR LA CONSULTA (solo lectura, no pasa por la cola)\n// Salida 1 -> MySQL · Salida 2 -> respuesta de error (400)\nconst ruta = msg.req.route.path;\nconst q = msg.req.query || {};\nconst prm = msg.req.params || {};\nconst CORS = { 'Access-Control-Allow-Origin': '*' };\nconst F = \"'%Y-%m-%dT%H:%i:%s-05:00'\";   // fechas de salida: ISO con zona, igual que en el POST\n\nfunction error(code, err, detail) {\n    msg.headers = CORS;\n    msg.statusCode = code;\n    msg.payload = { error: err, detail };\n    return [null, msg];\n}\n// ISO 8601 con zona -> 'YYYY-MM-DD HH:MM:SS' en hora de Colombia (igual que POST /reservas)\nfunction aMysql(iso) {\n    const m = /^(\\d{4}-\\d{2}-\\d{2})T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$/.exec(iso);\n    if (!m) return null;\n    const dia = new Date(m[1] + 'T00:00:00Z');                       // 31 de febrero no existe\n    if (isNaN(dia) || dia.toISOString().slice(0, 10) !== m[1] || m[1] < '2000') return null;\n    const ms = Date.parse(iso);\n    if (isNaN(ms)) return null;\n    return new Date(ms - 5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');\n}\n// Bahía con reserva vigente = amarillo encendido\nconst VIGENTE = `EXISTS (SELECT 1 FROM reservations r\n                 WHERE r.bay_id = b.bay_id AND r.status IN ('active', 'entered'))`;\n\n// ---------- GET /parqueaderos ----------\nif (ruta === '/parqueaderos') {\n    msg.topic = `SELECT n.node_id,\n          DATE_FORMAT(n.last_connection, ${F}) AS last_connection,\n          COUNT(x.bay_id) AS total_bays,\n          COALESCE(SUM(x.libre), 0) AS free_now\n        FROM nodes n\n        LEFT JOIN (\n            SELECT b.bay_id, b.node_id,\n                   (b.sensor_status = 0 AND NOT ${VIGENTE}) AS libre\n            FROM bays b\n        ) x ON x.node_id = n.node_id\n        GROUP BY n.node_id, n.last_connection\n        ORDER BY n.node_id`;\n    msg.payload = [];\n    return [msg, null];\n}\n\n// ---------- GET /parqueaderos/:node_id/bahias?desde=&hasta= ----------\nif (ruta === '/parqueaderos/:node_id/bahias') {\n    const nodeId = String(prm.node_id || '').trim();\n    if (!nodeId || nodeId.length > 30) return error(400, 'BAD_REQUEST', 'node_id inválido');\n\n    const hayDesde = q.desde !== undefined && String(q.desde).trim() !== '';\n    const hayHasta = q.hasta !== undefined && String(q.hasta).trim() !== '';\n    if (hayDesde !== hayHasta) return error(400, 'BAD_REQUEST', 'Envía desde y hasta juntos, o ninguno');\n\n    let disponible, params;\n    if (hayDesde) {\n        // Con franja: disponible = ninguna reserva (viva) se cruza con esa franja.\n        // Si la franja empieza ya (en 10 min o menos, igual que la regla de \"active\" del POST),\n        // la bahía además tiene que estar libre AHORA: sin carro y sin reserva vigente.\n        // Para franjas más adelante el sensor no cuenta: una bahía ocupada ahora puede estar libre mañana.\n        const ini = aMysql(String(q.desde).trim());\n        const fin = aMysql(String(q.hasta).trim());\n        if (!ini || !fin) return error(400, 'BAD_REQUEST', 'Fechas en ISO 8601 con zona, ej. 2026-11-22T08:00:00-05:00 (codificadas en la URL)');\n        if (fin <= ini) return error(400, 'BAD_REQUEST', 'hasta debe ser posterior a desde');\n        disponible = `(NOT EXISTS (SELECT 1 FROM reservations r\n                        WHERE r.bay_id = b.bay_id\n                          AND r.status IN ('reserved', 'active', 'entered')\n                          AND r.starts_at < CAST(? AS DATETIME) AND r.ends_at > CAST(? AS DATETIME))\n                      AND (CAST(? AS DATETIME) > NOW() + INTERVAL 10 MINUTE\n                           OR (b.sensor_status = 0 AND NOT ${VIGENTE})))`;\n        params = [fin, ini, ini, nodeId];\n    } else {\n        // Sin franja: disponible = libre ahora (sin carro y sin reserva vigente)\n        disponible = `(b.sensor_status = 0 AND NOT ${VIGENTE})`;\n        params = [nodeId];\n    }\n    msg.topic = `SELECT b.space_code AS space_id, b.sensor_status,\n          ${VIGENTE} AS reserved_now,\n          ${disponible} AS available\n        FROM bays b WHERE b.node_id = ? ORDER BY b.space_code`;\n    msg.payload = params;\n    return [msg, null];\n}\n\n// ---------- GET /parqueaderos/:node_id/agenda?fecha=YYYY-MM-DD ----------\n// Línea de tiempo de la página: reservas vivas que tocan ese día (hora de Colombia).\n// Sin placa ni código: la página es pública y solo necesita saber qué franjas están tomadas.\nif (ruta === '/parqueaderos/:node_id/agenda') {\n    const nodeId = String(prm.node_id || '').trim();\n    if (!nodeId || nodeId.length > 30) return error(400, 'BAD_REQUEST', 'node_id inválido');\n    const f = String(q.fecha || '').trim();\n    const d = new Date(f + 'T00:00:00Z');\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(f) || isNaN(d) || d.toISOString().slice(0, 10) !== f) {\n        return error(400, 'BAD_REQUEST', 'fecha debe ser YYYY-MM-DD');\n    }\n    msg.topic = `SELECT b.space_code AS space_id, r.status,\n          DATE_FORMAT(r.starts_at, ${F}) AS starts_at,\n          DATE_FORMAT(r.ends_at, ${F}) AS ends_at\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE b.node_id = ?\n          AND r.status IN ('reserved', 'active', 'entered')\n          AND r.starts_at < CAST(? AS DATE) + INTERVAL 1 DAY\n          AND r.ends_at > CAST(? AS DATE)\n        ORDER BY b.space_code, r.starts_at`;\n    msg.payload = [nodeId, f, f];\n    return [msg, null];\n}\n\n// ---------- GET /reservas/:id ----------\nif (ruta === '/reservas/:id') {\n    const rid = String(prm.id || '').trim();\n    if (!rid || rid.length > 20) return error(400, 'BAD_REQUEST', 'reservation_id inválido');\n    msg.topic = `SELECT r.reservation_id, b.node_id, b.space_code AS space_id, r.plate, r.status,\n          DATE_FORMAT(r.starts_at, ${F}) AS starts_at,\n          DATE_FORMAT(r.ends_at, ${F}) AS ends_at,\n          DATE_FORMAT(r.created_at, ${F}) AS created_at\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE r.reservation_id = ?`;\n    msg.payload = [rid];\n    return [msg, null];\n}\n\n// ---------- GET /reservas?placa=&node_id=&status=&fecha=&limit= ----------\nif (ruta === '/reservas') {\n    const where = [], params = [];\n\n    if (q.placa) {\n        const placa = String(q.placa).toUpperCase().replace(/[\\s-]/g, '');\n        if (!/^[A-Z0-9]{3,15}$/.test(placa)) return error(400, 'BAD_REQUEST', 'Placa con formato inválido');\n        where.push('r.plate = ?'); params.push(placa);\n    }\n    if (q.node_id) {\n        const n = String(q.node_id).trim();\n        if (!n || n.length > 30) return error(400, 'BAD_REQUEST', 'node_id inválido');\n        where.push('b.node_id = ?'); params.push(n);\n    }\n    if (q.status) {\n        const s = String(q.status).trim();\n        if (!['reserved', 'active', 'entered', 'completed', 'expired', 'cancelled'].includes(s)) {\n            return error(400, 'BAD_REQUEST', 'status debe ser reserved, active, entered, completed, expired o cancelled');\n        }\n        where.push('r.status = ?'); params.push(s);\n    }\n    if (q.fecha) {\n        // reservas que EMPIEZAN ese día (hora de Colombia)\n        const f = String(q.fecha).trim();\n        const d = new Date(f + 'T00:00:00Z');\n        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(f) || isNaN(d) || d.toISOString().slice(0, 10) !== f) {\n            return error(400, 'BAD_REQUEST', 'fecha debe ser YYYY-MM-DD');\n        }\n        where.push('r.starts_at >= CAST(? AS DATE) AND r.starts_at < CAST(? AS DATE) + INTERVAL 1 DAY');\n        params.push(f, f);\n    }\n    // Sin login, un listado sin filtros mostraría todas las placas: se exige al menos un filtro\n    if (where.length === 0) {\n        return error(400, 'BAD_REQUEST', 'Indica al menos un filtro: placa, node_id, status o fecha');\n    }\n    const limite = Math.min(Math.max(parseInt(q.limit, 10) || 100, 1), 500);   // entero validado\n\n    msg.topic = `SELECT r.reservation_id, b.node_id, b.space_code AS space_id, r.plate, r.status,\n          DATE_FORMAT(r.starts_at, ${F}) AS starts_at,\n          DATE_FORMAT(r.ends_at, ${F}) AS ends_at,\n          DATE_FORMAT(r.created_at, ${F}) AS created_at\n        FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n        WHERE ${where.join(' AND ')}\n        ORDER BY r.starts_at DESC\n        LIMIT ${limite}`;\n    msg.payload = params;\n    return [msg, null];\n}\n\nreturn error(404, 'NOT_FOUND', 'Ruta no reconocida');\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -2730,7 +2733,7 @@
         "type": "comment",
         "z": "parqueadero_unico",
         "g": "gs_3_00",
-        "name": "Corre al iniciar Node-RED y luego cada 60 s: activa reservas (≤10 min), libera las que no llegan en 15 min y vence las terminadas",
+        "name": "Corre al iniciar Node-RED y luego cada 60 s: activa reservas (≤10 min), libera las que no llegan en 10 min y vence las terminadas",
         "info": "",
         "x": 695,
         "y": 3023,
@@ -2856,7 +2859,7 @@
         "z": "parqueadero_unico",
         "g": "gs_3_00",
         "name": "SQL por vencer",
-        "func": "// Reservas que hay que cerrar:\n//  1) la franja ya terminó (cualquier estado vivo), o\n//  2) SIN LLEGADA: pasaron TOLERANCIA_MIN minutos desde la hora de inicio y el carro no ha entrado\n//     (sigue 'reserved' o 'active'). Se marca 'expired' y la bahía queda libre para otros.\nconst TOLERANCIA_MIN = 10;\n\nreturn {\n    topic: `SELECT r.reservation_id, r.status, b.node_id, b.space_code,\n                   (r.ends_at > NOW()) AS sin_llegada\n            FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n            WHERE (r.status IN ('reserved', 'active', 'entered') AND r.ends_at <= NOW())\n               OR (r.status IN ('reserved', 'active')\n                   AND r.starts_at <= NOW() - INTERVAL ${TOLERANCIA_MIN} MINUTE)`,\n    payload: []\n};",
+        "func": "// Reservas que hay que cerrar:\n//  1) la franja ya terminó (cualquier estado vivo), o\n//  2) SIN LLEGADA: pasaron TOLERANCIA_MIN minutos desde la hora de inicio y el carro no ha entrado\n//     (sigue 'reserved' o 'active'). Se marca 'expired' y la bahía queda libre para otros.\nconst TOLERANCIA_MIN = 10;\n\nreturn {\n    topic: `SELECT r.reservation_id, r.status, b.node_id, b.space_code,\n                   (r.ends_at > NOW()) AS sin_llegada,\n                   (SELECT COUNT(*) FROM reservations o\n                     WHERE o.bay_id = r.bay_id AND o.reservation_id <> r.reservation_id AND o.ends_at > NOW()\n                       AND (o.status = 'entered' OR (o.status IN ('reserved', 'active')\n                            AND o.starts_at <= NOW() + INTERVAL 10 MINUTE\n                            AND o.starts_at > NOW() - INTERVAL 10 MINUTE))) AS otra_vigente\n            FROM reservations r JOIN bays b ON b.bay_id = r.bay_id\n            WHERE (r.status IN ('reserved', 'active', 'entered') AND r.ends_at <= NOW())\n               OR (r.status IN ('reserved', 'active')\n                   AND r.starts_at <= NOW() - INTERVAL ${TOLERANCIA_MIN} MINUTE)`,\n    payload: []\n};",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -2928,7 +2931,7 @@
         "z": "parqueadero_unico",
         "g": "gs_3_00",
         "name": "¿Apagar amarillo?",
-        "func": "// Si otro proceso ya la cambió (p. ej. el carro salió), no se hace nada\nif (msg.payload.affectedRows !== 1) return null;\n\nconst r = msg.reserva;\nconst nuevo = r.status === 'entered' ? 'completed' : 'expired';\nconst motivo = Number(r.sin_llegada) === 1 && nuevo === 'expired' ? ' (sin llegada)' : '';\nnode.status({ fill: 'grey', shape: 'dot', text: `${r.reservation_id} → ${nuevo}${motivo}` });\n\n// 'reserved' nunca encendió el amarillo: no hay nada que apagar\nif (r.status === 'reserved') return null;\n\nreturn {\n    topic: `parqueadero/${r.node_id}/bahia/reserva`,\n    payload: { node_id: r.node_id, space_id: r.space_code, reserved: false }\n};\n",
+        "func": "// Si otro proceso ya la cambió (p. ej. el carro salió), no se hace nada\nif (msg.payload.affectedRows !== 1) return null;\n\nconst r = msg.reserva;\nconst nuevo = r.status === 'entered' ? 'completed' : 'expired';\nconst motivo = Number(r.sin_llegada) === 1 && nuevo === 'expired' ? ' (sin llegada)' : '';\nnode.status({ fill: 'grey', shape: 'dot', text: `${r.reservation_id} → ${nuevo}${motivo}` });\n\n// 'reserved' nunca encendió el amarillo: no hay nada que apagar\nif (r.status === 'reserved') return null;\n// La bahía ya está apartada para la siguiente reserva: el amarillo sigue encendido\nif (Number(r.otra_vigente) > 0) return null;\n\nreturn {\n    topic: `parqueadero/${r.node_id}/bahia/reserva`,\n    payload: { node_id: r.node_id, space_id: r.space_code, reserved: false }\n};\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -3244,7 +3247,7 @@
         "z": "parqueadero_unico",
         "g": "gs_4_00",
         "name": "2 · Duplicados (D1-D4)",
-        "func": "// 2 · DUPLICADOS  (D1, D2, D3, D4)\nconst cfg = msg.cfg, issues = msg.issues, d = msg.d;\nconst antes = issues.length;\nconst nota = (rule, table, id, action, detail) =>\n    issues.push({ rule, group: 'duplicado', table, id: String(id), action, detail });\nconst hora = ms => new Date(ms - 5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');\n\n// --- D1: misma placa y mismo nodo con entradas a menos de N s (doble entrega QoS 1) ---\n// Se conserva la primera y se descarta la copia.\nconst ses = d.sessions.filter(s => !s.drop)\n    .sort((a, b) => a.plate.localeCompare(b.plate) || String(a.node_id).localeCompare(String(b.node_id))\n        || a.entry_at - b.entry_at || a.session_id - b.session_id);\nlet previa = null;\nfor (const s of ses) {\n    if (previa && previa.plate === s.plate && previa.node_id === s.node_id\n        && s.entry_at - previa.entry_at <= cfg.duplicadoSeg * 1000) {\n        s.drop = true;\n        nota('D1', 'sessions', s.session_id, 'descartado',\n            `copia de la sesión ${previa.session_id} (${(s.entry_at - previa.entry_at) / 1000} s después)`);\n    } else {\n        previa = s;\n    }\n}\n\n// --- D2: la misma placa con dos sesiones abiertas al mismo tiempo ---\n// Un carro no puede estar en dos sitios. Se marca la segunda.\nconst porPlaca = {};\nfor (const s of d.sessions) if (!s.drop) (porPlaca[s.plate] = porPlaca[s.plate] || []).push(s);\nfor (const lista of Object.values(porPlaca)) {\n    lista.sort((a, b) => a.entry_at - b.entry_at);\n    let fin = -Infinity, dueña = null;\n    for (const s of lista) {\n        if (s.entry_at < fin) {\n            s.flags.push('D2');\n            nota('D2', 'sessions', s.session_id, 'marcado',\n                `placa ${s.plate} entra en ${s.node_id} con la sesión ${dueña.session_id} aún abierta en ${dueña.node_id}`);\n        }\n        const salida = s.exit_at === null ? msg.ahora : s.exit_at;\n        if (salida > fin) { fin = salida; dueña = s; }\n    }\n}\n\n// --- D3: el mismo estado dos veces seguidas en una bahía (true -> true) ---\n// El segundo no aporta información: se descarta.\nconst porBahia = {};\nfor (const e of d.bay_events) if (!e.drop) (porBahia[e.bay_id] = porBahia[e.bay_id] || []).push(e);\nfor (const lista of Object.values(porBahia)) {\n    lista.sort((a, b) => a.created_at - b.created_at || a.event_id - b.event_id);\n    let ultimo = null;\n    for (const e of lista) {\n        if (ultimo && ultimo.sensor_status === e.sensor_status) {\n            e.drop = true;\n            e.repetido = true;                 // T3 lo sigue contando como lectura del sensor\n            nota('D3', 'bay_events', e.event_id, 'descartado',\n                `${e.node_id} ${e.space_code}: repite sensor_status=${e.sensor_status} del evento ${ultimo.event_id}`);\n        } else {\n            ultimo = e;\n        }\n    }\n}\n\n// --- D4: dos reservas no canceladas que se cruzan en la misma bahía ---\nconst resPorBahia = {};\nfor (const r of d.reservations) {\n    if (!r.drop && r.status !== 'cancelled') (resPorBahia[r.bay_id] = resPorBahia[r.bay_id] || []).push(r);\n}\nfor (const lista of Object.values(resPorBahia)) {\n    lista.sort((a, b) => a.starts_at - b.starts_at);\n    let fin = -Infinity, dueña = null;\n    for (const r of lista) {\n        if (r.starts_at < fin) {\n            r.flags.push('D4');\n            nota('D4', 'reservations', r.reservation_id, 'marcado',\n                `se cruza con ${dueña.reservation_id} en ${r.node_id} ${r.space_code} (empieza ${hora(r.starts_at)})`);\n        }\n        if (r.ends_at > fin) { fin = r.ends_at; dueña = r; }\n    }\n}\n\nnode.status({ fill: 'green', shape: 'dot', text: (issues.length - antes) + ' hallazgos' });\nreturn msg;",
+        "func": "// 2 · DUPLICADOS  (D1, D2, D3, D4)\nconst cfg = msg.cfg, issues = msg.issues, d = msg.d;\nconst antes = issues.length;\nconst nota = (rule, table, id, action, detail) =>\n    issues.push({ rule, group: 'duplicado', table, id: String(id), action, detail });\nconst hora = ms => new Date(ms - 5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');\n\n// --- D1: misma placa y mismo nodo con entradas a menos de N s (doble entrega QoS 1) ---\n// Se conserva la primera y se descarta la copia.\nconst ses = d.sessions.filter(s => !s.drop)\n    .sort((a, b) => a.plate.localeCompare(b.plate) || String(a.node_id).localeCompare(String(b.node_id))\n        || a.entry_at - b.entry_at || a.session_id - b.session_id);\nlet previa = null;\nfor (const s of ses) {\n    if (previa && previa.plate === s.plate && previa.node_id === s.node_id\n        && s.entry_at - previa.entry_at <= cfg.duplicadoSeg * 1000) {\n        s.drop = true;\n        nota('D1', 'sessions', s.session_id, 'descartado',\n            `copia de la sesión ${previa.session_id} (${(s.entry_at - previa.entry_at) / 1000} s después)`);\n    } else {\n        previa = s;\n    }\n}\n\n// --- D2: la misma placa con dos sesiones abiertas al mismo tiempo ---\n// Un carro no puede estar en dos sitios. Se marca la segunda.\nconst porPlaca = {};\nfor (const s of d.sessions) if (!s.drop) (porPlaca[s.plate] = porPlaca[s.plate] || []).push(s);\nfor (const lista of Object.values(porPlaca)) {\n    lista.sort((a, b) => a.entry_at - b.entry_at);\n    let fin = -Infinity, dueña = null;\n    for (const s of lista) {\n        if (s.entry_at < fin) {\n            s.flags.push('D2');\n            nota('D2', 'sessions', s.session_id, 'marcado',\n                `placa ${s.plate} entra en ${s.node_id} con la sesión ${dueña.session_id} aún abierta en ${dueña.node_id}`);\n        }\n        const salida = s.exit_at === null ? msg.ahora : s.exit_at;\n        if (salida > fin) { fin = salida; dueña = s; }\n    }\n}\n\n// --- D3: el mismo estado dos veces seguidas en una bahía (true -> true) ---\n// El segundo no aporta información: se descarta.\nconst porBahia = {};\nfor (const e of d.bay_events) if (!e.drop) (porBahia[e.bay_id] = porBahia[e.bay_id] || []).push(e);\nfor (const lista of Object.values(porBahia)) {\n    lista.sort((a, b) => a.created_at - b.created_at || a.event_id - b.event_id);\n    let ultimo = null;\n    for (const e of lista) {\n        if (ultimo && ultimo.sensor_status === e.sensor_status) {\n            e.drop = true;\n            e.repetido = true;                 // T3 lo sigue contando como lectura del sensor\n            nota('D3', 'bay_events', e.event_id, 'descartado',\n                `${e.node_id} ${e.space_code}: repite sensor_status=${e.sensor_status} del evento ${ultimo.event_id}`);\n        } else {\n            ultimo = e;\n        }\n    }\n}\n\n// --- D4: dos reservas no canceladas que se cruzan en la misma bahía ---\n// Una reserva que terminó antes (el carro salió o no llegó) deja la bahía libre desde ese momento:\n// su fin real es la hora en que pasó a completed o expired.\nconst finReal = {};\nfor (const e of d.reservation_events) {\n    if (!e.drop && ['completed', 'expired'].includes(e.new_status)) finReal[e.reservation_id] = e.created_at;\n}\nconst finDe = r => Math.min(r.ends_at, finReal[r.reservation_id] ?? Infinity);\nconst resPorBahia = {};\nfor (const r of d.reservations) {\n    if (!r.drop && r.status !== 'cancelled') (resPorBahia[r.bay_id] = resPorBahia[r.bay_id] || []).push(r);\n}\nfor (const lista of Object.values(resPorBahia)) {\n    lista.sort((a, b) => a.starts_at - b.starts_at);\n    let fin = -Infinity, dueña = null;\n    for (const r of lista) {\n        if (r.starts_at < fin) {\n            r.flags.push('D4');\n            nota('D4', 'reservations', r.reservation_id, 'marcado',\n                `se cruza con ${dueña.reservation_id} en ${r.node_id} ${r.space_code} (empieza ${hora(r.starts_at)})`);\n        }\n        if (finDe(r) > fin) { fin = finDe(r); dueña = r; }\n    }\n}\n\nnode.status({ fill: 'green', shape: 'dot', text: (issues.length - antes) + ' hallazgos' });\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -3349,7 +3352,7 @@
         "z": "parqueadero_unico",
         "g": "gs_4_00",
         "name": "Guardar resultado",
-        "func": "// GUARDAR EL RESULTADO\n// Arma la lista de sentencias (vaciar y volver a llenar las tablas clean_* y\n// dq_issues, más una fila en dq_runs) y las manda de a una al nodo MySQL.\n// Salida 1 -> MySQL · Salida 2 -> resumen de la corrida\nif (!msg.cola) {\n    const d = msg.d, issues = msg.issues;\n    const fecha = ms => ms === null ? null : new Date(ms - 5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');\n    const run = fecha(msg.ahora);\n\n    const sesiones = d.sessions.filter(s => !s.drop).map(s => [\n        s.session_id, s.node_id, s.reservation_id, s.plate, s.reservation_id ? 'qr' : 'placa',\n        fecha(s.entry_at), fecha(s.exit_at),\n        s.exit_at === null ? null : Math.round((s.exit_at - s.entry_at) / 6000) / 10,\n        s.flags.join(',')\n    ]);\n    const eventos = d.bay_events.filter(e => !e.drop).map(e => [\n        e.event_id, e.bay_id, e.node_id, e.space_code, e.sensor_status ? 1 : 0, fecha(e.created_at), ''\n    ]);\n    const reservas = d.reservations.filter(r => !r.drop).map(r => [\n        r.reservation_id, r.bay_id, r.node_id, r.space_code, r.plate, fecha(r.starts_at), fecha(r.ends_at),\n        r.status, fecha(r.created_at), Math.round((r.ends_at - r.starts_at) / 6000) / 10, r.flags.join(',')\n    ]);\n    const hallazgos = issues.map(i => [run, i.rule, i.group, i.table, i.id, i.action, i.detail.slice(0, 255)]);\n\n    const cuenta = {}, porAccion = { corregido: 0, descartado: 0, marcado: 0 };\n    for (const i of issues) {\n        cuenta[i.rule] = (cuenta[i.rule] || 0) + 1;\n        porAccion[i.action]++;\n    }\n    const resumen = Object.keys(cuenta).sort().map(k => `${k}:${cuenta[k]}`).join(' ');\n    const salida = sesiones.length + eventos.length + reservas.length;\n\n    const cola = [\n        ['DELETE FROM clean_sessions', []], ['DELETE FROM clean_bay_events', []],\n        ['DELETE FROM clean_reservations', []], ['DELETE FROM dq_issues', []]\n    ];\n    const lotes = (sql, filas) => {\n        for (let i = 0; i < filas.length; i += 500) cola.push([sql, [filas.slice(i, i + 500)]]);\n    };\n    lotes(`INSERT INTO clean_sessions (session_id, node_id, reservation_id, plate, access_mode,\n           entry_at, exit_at, duration_min, flags) VALUES ?`, sesiones);\n    lotes(`INSERT INTO clean_bay_events (event_id, bay_id, node_id, space_code, sensor_status,\n           created_at, flags) VALUES ?`, eventos);\n    lotes(`INSERT INTO clean_reservations (reservation_id, bay_id, node_id, space_code, plate,\n           starts_at, ends_at, status, created_at, duration_min, flags) VALUES ?`, reservas);\n    lotes(`INSERT INTO dq_issues (run_id, rule_id, rule_group, source_table, record_id, action, detail)\n           VALUES ?`, hallazgos);\n    cola.push([`REPLACE INTO dq_runs (run_id, started_at, finished_at, rows_in, rows_out,\n                corrected, discarded, flagged, summary) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?)`,\n        [run, run, msg.filasEntrada, salida, porAccion.corregido, porAccion.descartado,\n            porAccion.marcado, resumen.slice(0, 500)]]);\n\n    msg.cola = cola;\n    msg.resumen = {\n        corrida: run, filas_entrada: msg.filasEntrada, filas_limpias: salida,\n        sesiones: sesiones.length, eventos_bahia: eventos.length, reservas: reservas.length,\n        corregidos: porAccion.corregido, descartados: porAccion.descartado, marcados: porAccion.marcado,\n        por_regla: cuenta\n    };\n    delete msg.d; delete msg.issues;\n}\nconst sig = msg.cola.shift();\nif (!sig) {\n    const r = msg.resumen;\n    node.status({ fill: 'green', shape: 'dot', text: `${r.filas_limpias} filas limpias · ${r.corrida}` });\n    return [null, { payload: r }];\n}\nmsg.topic = sig[0];\nmsg.payload = sig[1];\nnode.status({ fill: 'blue', shape: 'ring', text: 'guardando (' + msg.cola.length + ' pendientes)' });\nreturn [msg, null];",
+        "func": "// GUARDAR EL RESULTADO\n// Arma la lista de sentencias (vaciar y volver a llenar las tablas clean_* y\n// dq_issues, más una fila en dq_runs) y las manda de a una al nodo MySQL.\n// Salida 1 -> MySQL · Salida 2 -> resumen de la corrida\nif (!msg.cola) {\n    const d = msg.d, issues = msg.issues;\n    const fecha = ms => ms === null ? null : new Date(ms - 5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');\n    const run = fecha(msg.ahora);\n\n    const sesiones = d.sessions.filter(s => !s.drop).map(s => [\n        s.session_id, s.node_id, s.reservation_id, s.plate, s.reservation_id ? 'qr' : 'placa',\n        fecha(s.entry_at), fecha(s.exit_at),\n        s.exit_at === null ? null : Math.round((s.exit_at - s.entry_at) / 6000) / 10,\n        s.flags.join(',')\n    ]);\n    const eventos = d.bay_events.filter(e => !e.drop).map(e => [\n        e.event_id, e.bay_id, e.node_id, e.space_code, e.sensor_status ? 1 : 0, fecha(e.created_at), ''\n    ]);\n    const reservas = d.reservations.filter(r => !r.drop).map(r => [\n        r.reservation_id, r.bay_id, r.node_id, r.space_code, r.plate, fecha(r.starts_at), fecha(r.ends_at),\n        r.status, fecha(r.created_at), Math.round((r.ends_at - r.starts_at) / 6000) / 10, r.flags.join(',')\n    ]);\n    const hallazgos = issues.map(i => [run, i.rule, i.group, i.table, i.id, i.action, i.detail.slice(0, 255)]);\n\n    const cuenta = {}, porAccion = { corregido: 0, descartado: 0, marcado: 0 };\n    for (const i of issues) {\n        cuenta[i.rule] = (cuenta[i.rule] || 0) + 1;\n        porAccion[i.action]++;\n    }\n    const resumen = Object.keys(cuenta).sort().map(k => `${k}:${cuenta[k]}`).join(' ');\n    const salida = sesiones.length + eventos.length + reservas.length;\n\n    const cola = [\n        ['DELETE FROM clean_sessions', []], ['DELETE FROM clean_bay_events', []],\n        ['DELETE FROM clean_reservations', []], ['DELETE FROM dq_issues', []]\n    ];\n    const lotes = (sql, filas) => {\n        for (let i = 0; i < filas.length; i += 500) cola.push([sql, [filas.slice(i, i + 500)]]);\n    };\n    lotes(`INSERT INTO clean_sessions (session_id, node_id, reservation_id, plate, access_mode,\n           entry_at, exit_at, duration_min, flags) VALUES ?`, sesiones);\n    lotes(`INSERT INTO clean_bay_events (event_id, bay_id, node_id, space_code, sensor_status,\n           created_at, flags) VALUES ?`, eventos);\n    lotes(`INSERT INTO clean_reservations (reservation_id, bay_id, node_id, space_code, plate,\n           starts_at, ends_at, status, created_at, duration_min, flags) VALUES ?`, reservas);\n    lotes(`INSERT INTO dq_issues (run_id, rule_id, rule_group, source_table, record_id, action, detail)\n           VALUES ?`, hallazgos);\n    cola.push([`REPLACE INTO dq_runs (run_id, started_at, finished_at, rows_in, rows_out,\n                corrected, discarded, flagged, summary) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?)`,\n        [run, run, msg.filasEntrada, salida, porAccion.corregido, porAccion.descartado,\n            porAccion.marcado, resumen.slice(0, 500)]]);\n\n    msg.cola = cola;\n    msg.resumen = {\n        corrida: run, filas_entrada: msg.filasEntrada, filas_limpias: salida,\n        sesiones: sesiones.length, eventos_bahia: eventos.length, reservas: reservas.length,\n        corregidos: porAccion.corregido, descartados: porAccion.descartado, marcados: porAccion.marcado,\n        por_regla: cuenta\n    };\n    delete msg.d; delete msg.issues;\n}\nconst sig = msg.cola.shift();\nif (!sig) {\n    const r = msg.resumen;\n    node.status({ fill: 'green', shape: 'dot', text: `${r.filas_limpias} filas limpias · ${r.corrida}` });\n    return [null, { payload: r, auto: msg.auto }];\n}\nmsg.topic = sig[0];\nmsg.payload = sig[1];\nnode.status({ fill: 'blue', shape: 'ring', text: 'guardando (' + msg.cola.length + ' pendientes)' });\nreturn [msg, null];",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -3363,7 +3366,8 @@
                 "limp_sql_w"
             ],
             [
-                "limp_dbg"
+                "limp_dbg",
+                "auto_si"
             ]
         ]
     },
@@ -3418,7 +3422,10 @@
             "limp_g",
             "limp_sql_w",
             "limp_dbg",
-            "limp_err"
+            "limp_err",
+            "auto_inj",
+            "auto_si",
+            "auto_lo"
         ],
         "uncaught": false,
         "x": 449,
@@ -3531,8 +3538,8 @@
         "z": "parqueadero_unico",
         "g": "gs_4_10",
         "name": "Preparar: periodo, marcas y ocupación",
-        "func": "// PREPARAR\n// Define el periodo, aplica las marcas de la limpieza y convierte los eventos\n// de bahía en intervalos de ocupación. Todo queda en msg.p para los 6 nodos\n// de análisis.\n//\n// Cómo se usan las marcas (flags) de la limpieza:\n//   D2 (placa en dos sitios)      -> la sesión no entra a ningún cálculo\n//   A2 (duración no creíble)      -> cuenta como entrada, pero no para duraciones\n//   I2 (sin salida)               -> igual: no tiene duración\n//   I1 (sin node_id)              -> solo entra en el total, no en los cálculos por nodo\n//   T2 (historial inválido)       -> la reserva no entra en la distribución por estado\nconst cfg = msg.cfg, raw = msg.raw;\nconst Z = 5 * 3600000, H = 3600000, DIA = 86400000;\nconst aMs = t => t == null ? null : Date.parse(t.replace(' ', 'T') + cfg.zona);\nconst dia = ms => new Date(ms - Z).toISOString().slice(0, 10);\nconst horaDe = ms => new Date(ms - Z).getUTCHours();\nconst medianoche = ms => Math.floor((ms - Z) / DIA) * DIA + Z;\n\nif (raw.sessions.length === 0) {\n    node.warn('clean_sessions está vacía: corre primero la pestaña de limpieza');\n    node.status({ fill: 'red', shape: 'ring', text: 'sin datos' });\n    return null;\n}\n\n// --- Periodo: desde el primer día con datos hasta ayer ---\nlet primera = Infinity;\nfor (const s of raw.sessions) primera = Math.min(primera, aMs(s.entry_at));\nconst ini = medianoche(primera);\nlet fin = cfg.incluirHoy ? msg.ahora : medianoche(msg.ahora);\nif (fin <= ini) fin = msg.ahora;                    // solo hay datos de hoy\nconst dias = [];\nfor (let t = ini; t < fin; t += DIA) dias.push(dia(t));\n\n// --- Nodos y capacidad ---\nconst cap = {};\nfor (const b of raw.bays) cap[b.node_id] = Number(b.bays);\nconst nodos = Object.keys(cap).sort();\n\n// --- Sesiones ---\nconst ses = [];\nfor (const r of raw.sessions) {\n    const flags = r.flags ? r.flags.split(',') : [];\n    const entry = aMs(r.entry_at), exit = aMs(r.exit_at);\n    if (entry < ini || entry >= fin || flags.includes('D2')) continue;\n    ses.push({\n        node: cap[r.node_id] ? r.node_id : null,\n        modo: r.access_mode,\n        dia: dia(entry),\n        hora: horaDe(entry),\n        dur: (exit !== null && !flags.includes('A2')) ? (exit - entry) / 60000 : null\n    });\n}\n\n// --- Reservas (por el día en que empezaban) ---\nconst res = [];\nfor (const r of raw.reservations) {\n    const t = aMs(r.starts_at);\n    if (t < ini || t >= fin || !cap[r.node_id]) continue;\n    res.push({ node: r.node_id, status: r.status, dia: dia(t), fiable: !(r.flags || '').includes('T2') });\n}\n\n// --- Intervalos de ocupación de cada bahía (ocupada -> libre) ---\nconst porBahia = {};\nfor (const e of raw.bay_events) (porBahia[e.bay_id] = porBahia[e.bay_id] || []).push(e);\nconst maxMs = cfg.ocupacionMaxHoras * H;\nconst intervalos = [];\nlet ignorados = 0;\nfor (const lista of Object.values(porBahia)) {\n    let desde = null;\n    const cerrar = hasta => {\n        if (hasta - desde > maxMs) { ignorados++; return; }\n        const a = Math.max(desde, ini), b = Math.min(hasta, fin);\n        if (b > a) intervalos.push({ node: lista[0].node_id, a, b });\n    };\n    for (const e of lista) {\n        const t = aMs(e.created_at);\n        if (Number(e.sensor_status) === 1) { if (desde === null) desde = t; }\n        else if (desde !== null) { cerrar(t); desde = null; }\n    }\n    if (desde !== null) cerrar(msg.ahora);           // sigue ocupada en este momento\n}\n\n// --- Minutos-bahía ocupados por nodo, día y hora ---\nconst ocup = {};\nfor (const n of nodos) { ocup[n] = {}; for (const d of dias) ocup[n][d] = new Array(24).fill(0); }\nfor (const i of intervalos) {\n    if (!ocup[i.node]) continue;\n    let t = i.a;\n    while (t < i.b) {\n        const corte = Math.min(i.b, (Math.floor(t / H) + 1) * H);\n        const d = ocup[i.node][dia(t)];\n        if (d) d[horaDe(t)] += (corte - t) / 60000;\n        t = corte;\n    }\n}\n\n// --- Momentos en que un nodo tuvo TODAS sus bahías ocupadas ---\nconst llenos = [];\nfor (const n of nodos) {\n    const puntos = [];\n    for (const i of intervalos) if (i.node === n) puntos.push([i.a, 1], [i.b, -1]);\n    puntos.sort((x, y) => x[0] - y[0] || x[1] - y[1]);\n    let ocupadas = 0, desde = null;\n    for (const [t, delta] of puntos) {\n        ocupadas += delta;\n        if (ocupadas >= cap[n] && desde === null) desde = t;\n        else if (ocupadas < cap[n] && desde !== null) {\n            llenos.push({ node: n, dia: dia(desde), min: (t - desde) / 60000 });\n            desde = null;\n        }\n    }\n}\n\nmsg.p = { dias, nodos, cap, ses, res, ocup, llenos, issues: raw.issues, intervalosIgnorados: ignorados };\nmsg.out = {};                                        // aquí cada nodo de análisis deja sus filas\ndelete msg.raw;\nnode.status({ fill: 'green', shape: 'dot', text: `${dias[0]} a ${dias[dias.length - 1]} · ${ses.length} sesiones` });\nreturn msg;",
-        "outputs": 1,
+        "func": "// PREPARAR\n// Define el periodo, aplica las marcas de la limpieza y convierte los eventos\n// de bahía en intervalos de ocupación. Todo queda en msg.p para los 6 nodos\n// de análisis.\n//\n// Cómo se usan las marcas (flags) de la limpieza:\n//   D2 (placa en dos sitios)      -> la sesión no entra a ningún cálculo\n//   A2 (duración no creíble)      -> cuenta como entrada, pero no para duraciones\n//   I2 (sin salida)               -> igual: no tiene duración\n//   I1 (sin node_id)              -> solo entra en el total, no en los cálculos por nodo\n//   T2 (historial inválido)       -> la reserva no entra en la distribución por estado\nconst cfg = msg.cfg, raw = msg.raw;\nconst Z = 5 * 3600000, H = 3600000, DIA = 86400000;\nconst aMs = t => t == null ? null : Date.parse(t.replace(' ', 'T') + cfg.zona);\nconst dia = ms => new Date(ms - Z).toISOString().slice(0, 10);\nconst horaDe = ms => new Date(ms - Z).getUTCHours();\nconst medianoche = ms => Math.floor((ms - Z) / DIA) * DIA + Z;\n\n// Consulta por fechas sin datos: salida 2, respuesta vacía (si no, la petición quedaría colgada)\nconst sinDatos = () => { msg.vacio = true; delete msg.raw; return [null, msg]; }\n\nif (raw.sessions.length === 0) {\n    if (msg.rango) return sinDatos()\n    node.warn('clean_sessions está vacía: corre primero la pestaña de limpieza');\n    node.status({ fill: 'red', shape: 'ring', text: 'sin datos' });\n    return null;\n}\n\n// --- Periodo: desde el primer día con datos hasta ayer ---\nlet primera = Infinity;\nfor (const s of raw.sessions) primera = Math.min(primera, aMs(s.entry_at));\nlet ini = medianoche(primera);\nlet fin = cfg.incluirHoy ? msg.ahora : medianoche(msg.ahora);\nif (fin <= ini) fin = msg.ahora;                    // solo hay datos de hoy\n// Rango pedido: se recorta a los días que sí tienen datos\nmsg.disponible = { desde: dia(ini), hasta: dia(fin - 1) }\nif (msg.rango) {\n    if (msg.rango.desde) ini = Math.max(ini, aMs(msg.rango.desde + ' 00:00:00'))\n    if (msg.rango.hasta) fin = Math.min(fin, aMs(msg.rango.hasta + ' 00:00:00') + DIA)\n    if (fin <= ini) return sinDatos()\n}\nconst dias = [];\nfor (let t = ini; t < fin; t += DIA) dias.push(dia(t));\n\n// --- Nodos y capacidad ---\nconst cap = {};\nfor (const b of raw.bays) cap[b.node_id] = Number(b.bays);\nconst nodos = Object.keys(cap).sort();\n\n// --- Sesiones ---\nconst ses = [];\nfor (const r of raw.sessions) {\n    const flags = r.flags ? r.flags.split(',') : [];\n    const entry = aMs(r.entry_at), exit = aMs(r.exit_at);\n    if (entry < ini || entry >= fin || flags.includes('D2')) continue;\n    ses.push({\n        node: cap[r.node_id] ? r.node_id : null,\n        modo: r.access_mode,\n        dia: dia(entry),\n        hora: horaDe(entry),\n        dur: (exit !== null && !flags.includes('A2')) ? (exit - entry) / 60000 : null\n    });\n}\n\n// --- Reservas (por el día en que empezaban) ---\nconst res = [];\nfor (const r of raw.reservations) {\n    const t = aMs(r.starts_at);\n    if (t < ini || t >= fin || !cap[r.node_id]) continue;\n    res.push({ node: r.node_id, status: r.status, dia: dia(t), fiable: !(r.flags || '').includes('T2') });\n}\n\n// --- Intervalos de ocupación de cada bahía (ocupada -> libre) ---\nconst porBahia = {};\nfor (const e of raw.bay_events) (porBahia[e.bay_id] = porBahia[e.bay_id] || []).push(e);\nconst maxMs = cfg.ocupacionMaxHoras * H;\nconst intervalos = [];\nlet ignorados = 0;\nfor (const lista of Object.values(porBahia)) {\n    let desde = null;\n    const cerrar = hasta => {\n        if (hasta - desde > maxMs) { ignorados++; return; }\n        const a = Math.max(desde, ini), b = Math.min(hasta, fin);\n        if (b > a) intervalos.push({ node: lista[0].node_id, a, b });\n    };\n    for (const e of lista) {\n        const t = aMs(e.created_at);\n        if (Number(e.sensor_status) === 1) { if (desde === null) desde = t; }\n        else if (desde !== null) { cerrar(t); desde = null; }\n    }\n    if (desde !== null) cerrar(msg.ahora);           // sigue ocupada en este momento\n}\n\n// --- Minutos-bahía ocupados por nodo, día y hora ---\nconst ocup = {};\nfor (const n of nodos) { ocup[n] = {}; for (const d of dias) ocup[n][d] = new Array(24).fill(0); }\nfor (const i of intervalos) {\n    if (!ocup[i.node]) continue;\n    let t = i.a;\n    while (t < i.b) {\n        const corte = Math.min(i.b, (Math.floor(t / H) + 1) * H);\n        const d = ocup[i.node][dia(t)];\n        if (d) d[horaDe(t)] += (corte - t) / 60000;\n        t = corte;\n    }\n}\n\n// --- Momentos en que un nodo tuvo TODAS sus bahías ocupadas ---\nconst llenos = [];\nfor (const n of nodos) {\n    const puntos = [];\n    for (const i of intervalos) if (i.node === n) puntos.push([i.a, 1], [i.b, -1]);\n    puntos.sort((x, y) => x[0] - y[0] || x[1] - y[1]);\n    let ocupadas = 0, desde = null;\n    for (const [t, delta] of puntos) {\n        ocupadas += delta;\n        if (ocupadas >= cap[n] && desde === null) desde = t;\n        else if (ocupadas < cap[n] && desde !== null) {\n            llenos.push({ node: n, dia: dia(desde), min: (t - desde) / 60000 });\n            desde = null;\n        }\n    }\n}\n\nmsg.p = { dias, nodos, cap, ses, res, ocup, llenos, issues: raw.issues, intervalosIgnorados: ignorados };\nmsg.out = {};                                        // aquí cada nodo de análisis deja sus filas\ndelete msg.raw;\nnode.status({ fill: 'green', shape: 'dot', text: `${dias[0]} a ${dias[dias.length - 1]} · ${ses.length} sesiones` });\nreturn msg;",
+        "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
@@ -3543,6 +3550,9 @@
         "wires": [
             [
                 "232b4375d2462613"
+            ],
+            [
+                "rango_out"
             ]
         ]
     },
@@ -3689,7 +3699,7 @@
         "y": 4209,
         "wires": [
             [
-                "05fa52fdd01a0a3c"
+                "rango_sw"
             ]
         ]
     },
@@ -3770,14 +3780,20 @@
             "05fa52fdd01a0a3c",
             "63d11758ae21d894",
             "8ad9bc452d59b1e1",
-            "9f65cdd477615002"
+            "9f65cdd477615002",
+            "auto_li",
+            "rango_li",
+            "rango_sw",
+            "rango_out",
+            "rango_rlo"
         ],
         "uncaught": false,
         "x": 449,
         "y": 4409,
         "wires": [
             [
-                "9f65cdd477615002"
+                "9f65cdd477615002",
+                "rango_err"
             ]
         ]
     },
@@ -4609,7 +4625,8 @@
             "lo_res_http",
             "lo_con_http",
             "lo_ana_http",
-            "lo_web_http"
+            "lo_web_http",
+            "rango_rlo"
         ],
         "x": 429,
         "y": 1583,
@@ -4931,12 +4948,15 @@
             "332eadfeeb395e45",
             "0434cc79e7a5ec72",
             "d0dbeed3b8d68110",
-            "lo_ana_http"
+            "lo_ana_http",
+            "rango_in",
+            "rango_val",
+            "rango_lo"
         ],
         "x": 325,
         "y": 2493,
         "w": 1137,
-        "h": 342
+        "h": 397
     },
     {
         "id": "gs_2",
@@ -5043,7 +5063,10 @@
             "limp_sql_w",
             "limp_dbg",
             "limp_catch",
-            "limp_err"
+            "limp_err",
+            "auto_inj",
+            "auto_si",
+            "auto_lo"
         ],
         "x": 323,
         "y": 3371,
@@ -5080,12 +5103,18 @@
             "63d11758ae21d894",
             "8ad9bc452d59b1e1",
             "03065d45ebca74d8",
-            "9f65cdd477615002"
+            "9f65cdd477615002",
+            "auto_li",
+            "rango_li",
+            "rango_sw",
+            "rango_out",
+            "rango_rlo",
+            "rango_err"
         ],
         "x": 323,
         "y": 3908,
         "w": 972,
-        "h": 542
+        "h": 587
     },
     {
         "id": "gs_4_20",
@@ -5511,7 +5540,7 @@
         "z": "parqueadero_unico",
         "g": "gs_2_40",
         "name": "Archivo de la app",
-        "func": "// SERVIR LA APP WEB desde Node-RED (mismo origen que la API: sin problemas de CORS)\n// Solo se entregan los archivos de esta lista; cualquier otro nombre da 404.\nconst CARPETA = '/Users/vamphook/Documents/Universidad/IOT/parkinglot_iot_project/parking-app/';\nconst ARCHIVOS = {\n    'index.html': 'text/html; charset=utf-8',\n    'admin.html': 'text/html; charset=utf-8',\n    'estilos.css': 'text/css; charset=utf-8',\n    'comun.js': 'text/javascript; charset=utf-8',\n    'usuario.js': 'text/javascript; charset=utf-8',\n    'admin.js': 'text/javascript; charset=utf-8',\n    'config.js': 'text/javascript; charset=utf-8'\n};\n\n// GET /app  ->  redirige a la página del usuario\nif (msg.req.route.path === '/app') {\n    msg.statusCode = 302;\n    msg.headers = { Location: '/app/index.html' };\n    msg.payload = '';\n    return [null, msg];\n}\n\nconst archivo = String(msg.req.params.archivo || '');\nconst tipo = ARCHIVOS[archivo];\nif (!tipo) {\n    msg.statusCode = 404;\n    msg.headers = { 'Content-Type': 'application/json; charset=utf-8' };\n    msg.payload = { error: 'NOT_FOUND', detail: 'Archivo no encontrado' };\n    return [null, msg];\n}\nmsg.filename = CARPETA + archivo;\nmsg.headers = { 'Content-Type': tipo, 'Cache-Control': 'no-cache' };\nreturn [msg, null];\n",
+        "func": "// SERVIR LA APP WEB desde Node-RED (mismo origen que la API: sin problemas de CORS)\n// Solo se entregan los archivos de esta lista; cualquier otro nombre da 404.\nconst CARPETA = '/Users/vamphook/Documents/Universidad/IOT/parkinglot_iot_project/parking-app/';\nconst ARCHIVOS = {\n    'index.html': 'text/html; charset=utf-8',\n    'admin.html': 'text/html; charset=utf-8',\n    'estilos.css': 'text/css; charset=utf-8',\n    'comun.js': 'text/javascript; charset=utf-8',\n    'usuario.js': 'text/javascript; charset=utf-8',\n    'admin.js': 'text/javascript; charset=utf-8',\n    'config.js': 'text/javascript; charset=utf-8'\n};\n\n// GET /app  ->  redirige a la página del usuario\nif (msg.req.route.path === '/app') {\n    msg.statusCode = 302;\n    msg.headers = { Location: '/app/index.html' };\n    msg.payload = '';\n    return [null, msg];\n}\n\nconst archivo = String(msg.req.params.archivo || '');\nconst tipo = Object.hasOwn(ARCHIVOS, archivo) ? ARCHIVOS[archivo] : null;\nif (!tipo) {\n    msg.statusCode = 404;\n    msg.headers = { 'Content-Type': 'application/json; charset=utf-8' };\n    msg.payload = { error: 'NOT_FOUND', detail: 'Archivo no encontrado' };\n    return [null, msg];\n}\nmsg.filename = CARPETA + archivo;\nmsg.headers = { 'Content-Type': tipo, 'Cache-Control': 'no-cache' };\nreturn [msg, null];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -5582,5 +5611,236 @@
                 "d1a0000000000010"
             ]
         ]
+    },
+    {
+        "id": "auto_inj",
+        "type": "inject",
+        "name": "Cada noche (1:00 a. m.)",
+        "props": [
+            {
+                "p": "auto",
+                "v": "true",
+                "vt": "bool"
+            }
+        ],
+        "repeat": "",
+        "crontab": "00 01 * * *",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 469,
+        "y": 3502,
+        "wires": [
+            [
+                "limp_cfg"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_4_00"
+    },
+    {
+        "id": "auto_si",
+        "type": "function",
+        "name": "¿Automática? → análisis",
+        "func": "// La corrida de cada noche sigue con el análisis cuando la limpieza termina bien.\n// Con el botón \"Correr limpieza\" no: ahí el análisis se corre aparte.\nreturn msg.auto ? { auto: true } : null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 989,
+        "y": 3732,
+        "wires": [
+            [
+                "auto_lo"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_4_00"
+    },
+    {
+        "id": "auto_lo",
+        "type": "link out",
+        "name": "→ análisis",
+        "mode": "link",
+        "links": [
+            "auto_li"
+        ],
+        "x": 1145,
+        "y": 3732,
+        "wires": [],
+        "z": "parqueadero_unico",
+        "g": "gs_4_00"
+    },
+    {
+        "id": "auto_li",
+        "type": "link in",
+        "name": "limpieza de la noche",
+        "links": [
+            "auto_lo"
+        ],
+        "x": 425,
+        "y": 4039,
+        "wires": [
+            [
+                "a1993f2b571e50ee"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_4_10"
+    },
+    {
+        "id": "rango_in",
+        "type": "http in",
+        "name": "GET /api/analisis",
+        "url": "/api/analisis",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 531,
+        "y": 2844,
+        "wires": [
+            [
+                "rango_val"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_2_30"
+    },
+    {
+        "id": "rango_val",
+        "type": "function",
+        "name": "Validar fechas",
+        "func": "// ANÁLISIS DE UN RANGO DE FECHAS  (?desde=AAAA-MM-DD&hasta=AAAA-MM-DD, cualquiera de las dos)\n// Usa los mismos nodos que \"Correr análisis\", pero el resultado se devuelve\n// por HTTP y no se guarda en an_*.\n// Salida 1 -> análisis · Salida 2 -> error 400\nconst q = msg.req.query || {}\nconst rango = {}\nfunction error(detail) {\n    msg.headers = { 'Access-Control-Allow-Origin': '*' }\n    msg.statusCode = 400\n    msg.payload = { error: 'BAD_REQUEST', detail }\n    return [null, msg]\n}\nfor (const k of ['desde', 'hasta']) {\n    if (q[k] === undefined || q[k] === '') continue\n    const f = String(q[k]), d = new Date(f + 'T00:00:00Z')\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(f) || isNaN(d) || d.toISOString().slice(0, 10) !== f) {\n        return error(k + ' debe ser AAAA-MM-DD')\n    }\n    rango[k] = f\n}\nif (rango.desde && rango.hasta && rango.desde > rango.hasta) return error('desde no puede ser posterior a hasta')\nmsg.rango = rango\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 781,
+        "y": 2844,
+        "wires": [
+            [
+                "rango_lo"
+            ],
+            [
+                "lo_ana_http"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_2_30"
+    },
+    {
+        "id": "rango_lo",
+        "type": "link out",
+        "name": "→ análisis",
+        "mode": "link",
+        "links": [
+            "rango_li"
+        ],
+        "x": 945,
+        "y": 2844,
+        "wires": [],
+        "z": "parqueadero_unico",
+        "g": "gs_2_30"
+    },
+    {
+        "id": "rango_li",
+        "type": "link in",
+        "name": "análisis por fechas",
+        "links": [
+            "rango_lo"
+        ],
+        "x": 425,
+        "y": 4079,
+        "wires": [
+            [
+                "a1993f2b571e50ee"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_4_10"
+    },
+    {
+        "id": "rango_sw",
+        "type": "function",
+        "name": "¿Guardar o responder?",
+        "func": "// Salida 1 -> guardar en an_* · Salida 2 -> responder la consulta por fechas (no guarda nada)\nreturn msg.rango ? [null, msg] : [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 949,
+        "y": 4289,
+        "wires": [
+            [
+                "05fa52fdd01a0a3c"
+            ],
+            [
+                "rango_out"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_4_10"
+    },
+    {
+        "id": "rango_out",
+        "type": "function",
+        "name": "Respuesta por fechas",
+        "func": "// Arma la respuesta de GET /api/analisis con las mismas columnas que las rutas /api/*/:nodo\nmsg.headers = { 'Access-Control-Allow-Origin': '*' }\nmsg.statusCode = 200\nif (msg.vacio) {\n    msg.payload = { periodo: null, disponible: msg.disponible || null, nodos: [], resumen: [], horas: [], dias: [], categorias: [] }\n    return msg\n}\nconst p = msg.p, out = msg.out\nconst r1 = x => Math.round(x * 10) / 10\nconst capTotal = p.nodos.reduce((s, n) => s + p.cap[n], 0)\nconst resumen = [...p.nodos, 'TODOS'].map(n => {\n    const ds = out.daily.filter(f => f.node_id === n)\n    const suma = c => ds.reduce((s, f) => s + f[c], 0)\n    const dur = out.stats.find(f => ['total', 'nodo'].includes(f.scope_type) && f.scope === n && f.variable === 'duracion_min')\n    const pico = out.hourly.filter(f => f.node_id === n).reduce((a, b) => b.occupancy_pct > a.occupancy_pct ? b : a)\n    const entradas = suma('entries'), reservas = suma('reservations')\n    return {\n        node_id: n, bays: n === 'TODOS' ? capTotal : p.cap[n],\n        entries: entradas, entries_per_day: r1(entradas / ds.length),\n        occupancy_pct: r1(suma('occupancy_pct') / ds.length),\n        reservations: reservas,\n        no_show_pct: reservas ? r1(100 * suma('no_shows') / reservas) : null,\n        pct_qr: entradas ? r1(100 * suma('entries_qr') / entradas) : null,\n        times_full: suma('times_full'), minutes_full: suma('minutes_full'),\n        avg_duration_min: dur ? dur.mean : null, median_duration_min: dur ? dur.median : null,\n        peak_hour: pico.occupancy_pct > 0 ? pico.hour : null,\n        period_from: p.dias[0], period_to: p.dias[p.dias.length - 1]\n    }\n})\nmsg.payload = {\n    periodo: { desde: p.dias[0], hasta: p.dias[p.dias.length - 1], dias: p.dias.length },\n    disponible: msg.disponible,\n    nodos: out.nodes.map(({ issues, ...n }) => n),\n    resumen, horas: out.hourly, dias: out.daily,\n    categorias: [...out.categories].sort((a, b) => a.category.localeCompare(b.category) || b.n - a.n)\n}\ndelete msg.p; delete msg.out\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 949,
+        "y": 4349,
+        "wires": [
+            [
+                "rango_rlo"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_4_10"
+    },
+    {
+        "id": "rango_rlo",
+        "type": "link out",
+        "name": "→ respuesta HTTP",
+        "mode": "link",
+        "links": [
+            "li_http"
+        ],
+        "x": 1145,
+        "y": 4349,
+        "wires": [],
+        "z": "parqueadero_unico",
+        "g": "gs_4_10"
+    },
+    {
+        "id": "rango_err",
+        "type": "function",
+        "name": "¿Era consulta HTTP? → 500",
+        "func": "if (!msg.rango || !msg.res) return null;\nmsg.headers = { 'Access-Control-Allow-Origin': '*' };\nmsg.statusCode = 500;\nmsg.payload = { error: 'SERVER_ERROR', detail: 'No se pudo calcular el análisis' };\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 949,
+        "y": 4409,
+        "wires": [
+            [
+                "rango_rlo"
+            ]
+        ],
+        "z": "parqueadero_unico",
+        "g": "gs_4_10"
     }
 ]

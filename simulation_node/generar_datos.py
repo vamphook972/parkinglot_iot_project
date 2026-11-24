@@ -1,40 +1,51 @@
 #!/usr/bin/env python3
 """
-Historial LIMPIO de PARKING-003 (4 bahías) para probar la limpieza y el análisis.
+Genera un historial LIMPIO de prueba para un parqueadero, en el rango de fechas que se pida,
+para probar la limpieza, el análisis y el filtro por fechas. SON DATOS DE PRUEBA.
 
-A diferencia de generar_historial.py, aquí no se inyectan defectos: los datos
-se generan siguiendo las mismas reglas que aplica el flujo de Node-RED, así que
-la limpieza debería encontrar muy poco (solo lo que pasa en la realidad, como
-huecos largos sin movimiento en fin de semana).
+A diferencia de generar_historial.py, aquí no se inyectan defectos: los datos siguen las mismas
+reglas que aplica el flujo de Node-RED, así que la limpieza debería encontrar muy poco.
 
 Reglas que respeta:
   * una placa no puede estar adentro dos veces al mismo tiempo (ACTIVE_SESSION)
   * un carro sin reserva no entra a una bahía apartada; si no hay bahía, no entra (NO_BAYS)
   * reserva: nace 'reserved', pasa a 'active' 10 min antes (revisión de cada minuto),
-    el carro entra con QR entre -10 y +15 min del inicio ('entered'),
+    el carro entra con QR entre -10 y +10 min del inicio ('entered'),
     'completed' cuando sale o cuando termina la franja (lo que pase primero);
-    si nadie llega en 15 min -> 'expired'; algunas se cancelan antes de empezar
+    si nadie llega en 10 min -> 'expired'; algunas se cancelan antes de empezar
   * el sensor de la bahía se enciende 40-180 s después de la barrera y se apaga
     30-150 s antes de la salida
   * reservation_events lleva la hora real de cada cambio de estado
 
-Uso:   python3 generar_parking003.py            -> escribe historial_parking003.sql
+Uso:   python3 generar_datos.py --nodo PARKING-003 --bahias 4 --desde 2026-10-05 --semilla 3
        docker exec -i my-mariadb sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" parking_db' < historial_parking003.sql
 
-NO borra nada de otros nodos. Sí reemplaza el historial de PARKING-003.
+Con --meses se cambia la demanda por mes: --meses 9:0.6,10:1.0,11:1.2
+NO borra nada de otros nodos. Sí reemplaza el historial del nodo indicado.
 """
 
+import argparse
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-SEED = 20261123
+ap = argparse.ArgumentParser()
+ap.add_argument("--nodo", required=True)
+ap.add_argument("--bahias", type=int, required=True)
+ap.add_argument("--desde", type=date.fromisoformat, required=True)
+ap.add_argument("--semilla", type=int, default=1)
+ap.add_argument("--demanda", type=float, default=1.0, help="1.0 llena el parqueadero en hora pico")
+ap.add_argument("--reservas", type=float, default=5, help="reservas en un día normal")
+ap.add_argument("--meses", default="", help="factor de demanda por mes, ej. 9:0.6,11:1.2")
+args = ap.parse_args()
+
+SEED = args.semilla
 random.seed(SEED)
 
-NODO = "PARKING-003"
-BAHIAS = ["B-001", "B-002", "B-003", "B-004"]
-DIAS = 28                   # 4 semanas hasta hoy
-ARCHIVO = "historial_parking003.sql"
-DEMANDA = 1.05              # 1.0 llena el parqueadero en hora pico
+NODO = args.nodo
+BAHIAS = [f"B-{i:03d}" for i in range(1, args.bahias + 1)]
+ARCHIVO = f"historial_{NODO.lower().replace('-', '')}.sql"
+DEMANDA = args.demanda
+MESES = {int(k): float(v) for k, v in (x.split(":") for x in args.meses.split(",") if x)}
 
 # Llegadas por hora (mismo perfil de campus que generar_historial.py)
 PERFIL_HORA = [
@@ -45,7 +56,7 @@ PERFIL_HORA = [
 ]
 FACTOR_DIA = [1.00, 1.05, 1.00, 1.00, 0.90, 0.45, 0.25]   # lunes..domingo
 
-RESERVAS_DIA = 5            # reservas en un día normal (se escala con FACTOR_DIA)
+RESERVAS_DIA = args.reservas   # se escala con FACTOR_DIA y con el mes
 PCT_NO_SHOW = 0.13
 PCT_CANCELADA = 0.09
 
@@ -53,7 +64,8 @@ LETRAS = "ABCDEFGHJKLMNPRSTUVWXYZ"
 COL = timezone(timedelta(hours=-5))
 AHORA = datetime.now(COL).replace(tzinfo=None, microsecond=0)
 HOY = AHORA.date()
-INICIO = datetime.combine(HOY - timedelta(days=DIAS), datetime.min.time())
+INICIO = datetime.combine(args.desde, datetime.min.time())
+DIAS = (HOY - args.desde).days
 
 
 # ------------------------------------------------------------------ placas
@@ -86,7 +98,7 @@ def cruza(intervalos, a, b):
 
 # ------------------------------------------------------------------ estado
 ocupada = {b: [] for b in BAHIAS}          # (entrada, salida) de carros en la bahía
-apartada = {b: [] for b in BAHIAS}         # lo que bloquea a carros SIN reserva (una sin llegada se libera a los 15 min)
+apartada = {b: [] for b in BAHIAS}         # lo que bloquea a carros SIN reserva (una sin llegada se libera a los 10 min)
 franjas = {b: [] for b in BAHIAS}          # lo que bloquea a OTRAS RESERVAS: la franja completa de toda reserva no cancelada
 placa_adentro = {}                         # placa -> [(entrada, salida)]
 sesiones, reservas, ev_reserva, ev_bahia = [], [], [], []
@@ -96,7 +108,7 @@ _rid = 0
 def nuevo_rid():
     global _rid
     _rid += 1
-    return f"RSV-{HOY:%y%m}{_rid:04d}"
+    return f"RSV-{NODO[-3:]}-{_rid:05d}"
 
 
 def placa_libre(p, a, b):
@@ -125,7 +137,7 @@ def lag():
 # ------------------------------------------------------------------ 1. reservas
 for d in range(DIAS + 2):                         # +2: incluye mañana y pasado (programadas)
     dia = INICIO.date() + timedelta(days=d)
-    factor = FACTOR_DIA[dia.weekday()]
+    factor = FACTOR_DIA[dia.weekday()] * MESES.get(dia.month, 1.0)
     for _ in range(max(0, round(random.gauss(RESERVAS_DIA * factor, 1)))):
         hora = random.choices(range(24), weights=PERFIL_HORA)[0]
         if hora < 6:
@@ -134,7 +146,7 @@ for d in range(DIAS + 2):                         # +2: incluye mañana y pasado
         fin = ini + timedelta(minutes=random.choice([60, 90, 120, 120, 180, 240]))
         ventana = (ini - timedelta(minutes=10), fin)
         # no generar reservas que estén "en el aire" justo ahora (las maneja el flujo en vivo)
-        if ini - timedelta(minutes=10) <= AHORA < fin + timedelta(minutes=15):
+        if ini - timedelta(minutes=10) <= AHORA < fin + timedelta(minutes=10):
             continue
         libres = [b for b in BAHIAS if not cruza(franjas[b], *ventana) and not cruza(ocupada[b], *ventana)]
         if not libres:
@@ -170,12 +182,12 @@ for d in range(DIAS + 2):                         # +2: incluye mañana y pasado
                 ev.append((rid, ev[-1][2], "cancelled", cancel.replace(microsecond=0)))
                 estado = "cancelled"
             elif r < PCT_CANCELADA + PCT_NO_SHOW:
-                ev.append((rid, "active", "expired", ini + timedelta(minutes=15) + lag()))
+                ev.append((rid, "active", "expired", ini + timedelta(minutes=10) + lag()))
                 estado = "expired"
-                apartada[bahia].append((ventana[0], ini + timedelta(minutes=15)))
+                apartada[bahia].append((ventana[0], ini + timedelta(minutes=10)))
                 franjas[bahia].append(ventana)
             else:
-                entrada = ini + timedelta(minutes=random.randint(-10, 12), seconds=random.randint(0, 59))
+                entrada = ini + timedelta(minutes=random.randint(-10, 8), seconds=random.randint(0, 59))
                 entrada = max(entrada, activa + timedelta(seconds=random.randint(20, 90)))   # el QR solo vale ya 'active'
                 salida = fin + timedelta(minutes=random.randint(-40, 10), seconds=random.randint(0, 59))
                 salida = max(salida, entrada + timedelta(minutes=25))
@@ -193,7 +205,7 @@ for d in range(DIAS + 2):                         # +2: incluye mañana y pasado
 # ------------------------------------------------------------------ 2. llegadas sin reserva
 for d in range(DIAS + 1):
     dia = INICIO.date() + timedelta(days=d)
-    factor = FACTOR_DIA[dia.weekday()]
+    factor = FACTOR_DIA[dia.weekday()] * MESES.get(dia.month, 1.0)
     for hora in range(24):
         lam = len(BAHIAS) * DEMANDA * PERFIL_HORA[hora] * factor
         # Poisson sencillo

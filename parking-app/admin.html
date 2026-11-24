@@ -45,6 +45,9 @@
         .relleno { display: block; height: 100%; background: var(--serie-1); border-radius: 99px; }
         .tendencia-sube { color: var(--libre); } .tendencia-baja { color: var(--ocupada); }
         .filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .fechas { margin-top: 10px; }
+        .fechas .campo { display: flex; align-items: center; gap: 8px; }
+        .fechas .campo input { width: auto; }
         .periodo { font-size: 0.85rem; color: var(--texto-2); background: var(--panel); border: 1px solid var(--borde); border-radius: 999px; padding: 6px 12px; }
     </style>
 </head>
@@ -120,9 +123,21 @@
 
             <div class="filtros" id="nodos" role="group" aria-label="Parqueadero"></div>
 
+            <div class="filtros fechas" role="group" aria-label="Periodo">
+                <button type="button" class="chip" data-rango="todo" aria-pressed="true">Todo</button>
+                <button type="button" class="chip" data-rango="7" aria-pressed="false">Últimos 7 días</button>
+                <button type="button" class="chip" data-rango="14" aria-pressed="false">Últimos 14 días</button>
+                <button type="button" class="chip" data-rango="30" aria-pressed="false">Últimos 30 días</button>
+                <label class="campo"><span>Desde</span><input type="date" id="f-desde"></label>
+                <label class="campo"><span>Hasta</span><input type="date" id="f-hasta"></label>
+                <span class="nota" id="aviso-fechas" role="status"></span>
+            </div>
+
             <div id="analisis-vacio" class="panel vacio seccion" hidden>
-                <strong>Todavía no hay análisis guardado</strong>
-                En Node-RED, grupo <em>4 · Análisis de datos</em>, corre primero <em>Correr limpieza</em> y luego <em>Correr análisis</em>.
+                <div id="vacio-sin-analisis"><strong>Todavía no hay análisis guardado</strong>
+                Se calcula cada noche. Para verlo ya, en Node-RED, grupo <em>4 · Análisis de datos</em>, corre primero <em>Correr limpieza</em> y luego <em>Correr análisis</em>.</div>
+                <div id="vacio-sin-fechas" hidden><strong>No hay datos en esas fechas</strong>
+                Elige otro periodo o toca <em>Todo</em>.</div>
             </div>
 
             <div id="analisis-contenido">

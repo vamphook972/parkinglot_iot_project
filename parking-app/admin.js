@@ -2,6 +2,7 @@
 // Parking IoT · panel de administración
 // En vivo:  GET /parqueaderos, /parqueaderos/:id/bahias, /reservas?status=…, DELETE /reservas/:id
 // Análisis: GET /api/nodos, /api/resumen|horas|dias|categorias/:nodo  (tablas an_*)
+//           GET /api/analisis?desde=&hasta=  (periodo elegido, calculado al momento)
 // ==========================================================================
 
 const TODOS = 'TODOS';
@@ -176,14 +177,23 @@ async function elegirNodo(id) {
     nodoActual = id;
     pintarSelector();
     pintarTablaNodos();
+    const pedido = ++ultimoPedido;
     let resumen, horas, dias, categorias;
     try {
-        [resumen, horas, dias, categorias] = await Promise.all(
-            ['resumen', 'horas', 'dias', 'categorias'].map(r => apiAnalisis(`${r}/${encodeURIComponent(id)}`)));
+        if (porFechas) {
+            const del = k => porFechas[k].filter(f => f.node_id === id);
+            [resumen, horas, dias, categorias] = ['resumen', 'horas', 'dias', 'categorias'].map(del);
+        } else {
+            [resumen, horas, dias, categorias] = await Promise.all(
+                ['resumen', 'horas', 'dias', 'categorias'].map(r => apiAnalisis(`${r}/${encodeURIComponent(id)}`)));
+        }
     } catch (e) { console.error(e); return; }
+    if (pedido !== ultimoPedido) return;         // ya se eligió otra cosa mientras respondía
 
     const vacio = !resumen.length;
     $('#analisis-vacio').hidden = !vacio;
+    $('#vacio-sin-analisis').hidden = !!porFechas;
+    $('#vacio-sin-fechas').hidden = !porFechas;
     $('#analisis-contenido').hidden = vacio;
     if (vacio) { $('#periodo').textContent = 'Sin datos'; return; }
     if (id === TODOS) horasTodos = horas;
@@ -197,6 +207,58 @@ async function elegirNodo(id) {
     graficaCategoria('g-acceso', categorias, 'modo_acceso', { qr: 'Con QR (reserva)', placa: 'Digitando la placa' }, 'entradas');
     graficaCategoria('g-estadia', categorias, 'tipo_estadia', {}, 'estadías');
 }
+
+// ---------- Periodo ----------
+// Sin filtro se lee lo guardado en an_*. Con fechas, Node-RED calcula ese periodo en el momento
+// y devuelve todos los parqueaderos: cambiar de parqueadero no repite la consulta.
+let porFechas = null;            // respuesta de /api/analisis, o null = todo el historial
+let ultimoPedido = 0;
+let nodosTodo = null, horasTodosTodo = null;
+
+const isoMas = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+const ayer = () => isoMas(new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10), -1);
+
+function marcarRango(cual) {
+    $$('[data-rango]').forEach(b => b.setAttribute('aria-pressed', b.dataset.rango === cual));
+}
+
+async function aplicarFechas(cual) {
+    const desde = $('#f-desde').value, hasta = $('#f-hasta').value, aviso = $('#aviso-fechas');
+    aviso.textContent = '';
+    if (desde && hasta && desde > hasta) { aviso.textContent = '“Desde” no puede ser posterior a “Hasta”.'; return; }
+    nodosTodo = nodosTodo || nodos;
+    horasTodosTodo = horasTodosTodo || horasTodos;
+    const pedido = ++ultimoPedido;
+    if (!desde && !hasta) {
+        marcarRango('todo');
+        porFechas = null; nodos = nodosTodo; horasTodos = horasTodosTodo;
+        return elegirNodo(nodoActual);
+    }
+    const q = new URLSearchParams();
+    if (desde) q.set('desde', desde);
+    if (hasta) q.set('hasta', hasta);
+    aviso.textContent = 'Calculando…';
+    const r = await api('/api/analisis?' + q);
+    if (pedido !== ultimoPedido) return;
+    aviso.textContent = r.ok ? '' : (r.data && r.data.detail) || 'No se pudo calcular ese periodo. Revisa Node-RED.';
+    if (!r.ok) return;
+    marcarRango(cual);
+    porFechas = r.data;
+    nodos = r.data.nodos;
+    horasTodos = r.data.horas.filter(f => f.node_id === TODOS);
+    if (nodoActual !== TODOS && nodos.length && !nodos.some(n => n.node_id === nodoActual)) nodoActual = TODOS;
+    const p = r.data.periodo, d = r.data.disponible;
+    if (p && ((desde && desde < p.desde) || (hasta && hasta > p.hasta))) aviso.textContent = `Hay datos del ${fechaLarga(d.desde)} al ${fechaLarga(d.hasta)}.`;
+    elegirNodo(nodoActual);
+}
+
+$$('[data-rango]').forEach(b => b.onclick = () => {
+    const n = Number(b.dataset.rango);
+    $('#f-desde').value = n ? isoMas(ayer(), 1 - n) : '';
+    $('#f-hasta').value = n ? ayer() : '';
+    aplicarFechas(b.dataset.rango);
+});
+$('#f-desde').onchange = $('#f-hasta').onchange = () => aplicarFechas('');
 
 function pintarKpisAnalisis(r) {
     const items = [

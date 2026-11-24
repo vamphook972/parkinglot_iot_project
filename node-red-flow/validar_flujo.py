@@ -382,6 +382,14 @@ check('08 /api/categorias -> categorías válidas',
       code == 200 and all(f['category'] in ('estado_reserva', 'modo_acceso', 'tipo_estadia') for f in body), (code, str(body)[:200]))
 code, body, _ = http('GET', '/api/no-existe')
 check('09 ruta inexistente -> 404', code == 404, code)
+code, body, _ = http('GET', '/api/analisis?desde=2026-11-10&hasta=2026-11-12')
+check('10 /api/analisis con fechas -> no sale del rango',
+      code == 200 and all('2026-11-10' <= d['day'] <= '2026-11-12' for d in body['dias']), (code, body))
+code, body, _ = http('GET', '/api/analisis?desde=2099-01-01')
+check('11 /api/analisis sin datos en el rango -> 200 vacío', code == 200 and body['resumen'] == [], (code, body))
+for malo in ('desde=2026-02-31', 'desde=2026-11-10&hasta=2026-11-01'):
+    code, body, _ = http('GET', '/api/analisis?' + malo)
+    check(f'12 /api/analisis?{malo} -> 400', code == 400 and body.get('error') == 'BAD_REQUEST', (code, body))
 
 cli.loop_stop()
 fallas = [n for n, ok in resultados if not ok]
