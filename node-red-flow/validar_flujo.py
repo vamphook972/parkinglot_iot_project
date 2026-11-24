@@ -346,7 +346,7 @@ check('franja de mañana -> la misma bahía sí disponible', b3.get('available')
 publicar('bahia/sensor', {'node_id': NODE, 'space_id': 'B-003', 'sensor_status': False})
 time.sleep(2.5)
 
-# Tolerancia: sin llegada 15 min después del inicio -> expired y amarillo OFF
+# Tolerancia: sin llegada 10 min después del inicio -> expired y amarillo OFF
 rT = f'RSV-T{RUN}'
 code, body, _ = http('POST', '/reservas', reserva(rT, 'B-001', f'PT{RUN}', fecha(-20), fecha(40)))
 check('reserva que empezó hace 20 min -> 201 active', code == 201 and body.get('status') == 'active', (code, body))
@@ -355,7 +355,7 @@ vaciar()
 http('POST', '/inject/v_tick')
 _, br = esperar(lambda t, p: t == 'bahia/reserva' and p.get('space_id') == 'B-001' and p.get('reserved') is False, 8)
 code, body, _ = http('GET', f'/reservas/{rT}')
-check('revisión: sin llegada a los 15 min -> expired', code == 200 and body.get('status') == 'expired', (code, body))
+check('revisión: sin llegada a los 10 min -> expired', code == 200 and body.get('status') == 'expired', (code, body))
 check('revisión: sin llegada -> bahia/reserva false (amarillo OFF)', br is not None, br)
 
 # ---------------------------------------------------------------- HTTP: análisis (Bruno 2 - Analisis)

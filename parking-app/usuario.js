@@ -605,8 +605,8 @@ function mostrarTiquete(r, recienCreada = false) {
         <div><dt>Horario</dt><dd>${esc(franja(r.starts_at, r.ends_at))}</dd></div>
         <div><dt>Placa</dt><dd>${esc(r.plate)}</dd></div>`;
     $('#exito-nota').textContent = r.status === 'active'
-        ? `La bahía ya está apartada para ti (luz amarilla). Te espera hasta las ${horaCorta(new Date(Date.parse(r.starts_at) + 15 * 60000).toISOString())}; si no llegas, se libera.`
-        : `La bahía se aparta 10 minutos antes de tu hora de llegada y te espera hasta las ${horaCorta(new Date(Date.parse(r.starts_at) + 15 * 60000).toISOString())}. Escanea el QR en la entrada.`;
+        ? `La bahía ya está apartada para ti (luz amarilla). Te espera hasta las ${horaCorta(new Date(Date.parse(r.starts_at) + 10 * 60000).toISOString())}; si no llegas, se libera.`
+        : `La bahía se aparta 10 minutos antes de tu hora de llegada y te espera hasta las ${horaCorta(new Date(Date.parse(r.starts_at) + 10 * 60000).toISOString())}. Escanea el QR en la entrada.`;
     d.showModal();
 }
 $$('dialog [data-cerrar]').forEach(b => b.onclick = () => b.closest('dialog').close());

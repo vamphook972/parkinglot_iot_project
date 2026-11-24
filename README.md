@@ -117,7 +117,7 @@ El script actualiza `config.js`, hace push a `main` y publica la rama `gh-pages`
 | `active` | Faltan 10 minutos o menos para que empiece. La bahía queda apartada y el LED se enciende. |
 | `entered` | El carro entró con la placa o el QR. |
 | `completed` | El carro salió. |
-| `expired` | El carro no llegó en los 15 minutos de tolerancia, o la franja terminó. |
+| `expired` | El carro no llegó en los 10 minutos de tolerancia, o la franja terminó. |
 | `cancelled` | El usuario o el administrador la canceló. |
 
 ## Pruebas
