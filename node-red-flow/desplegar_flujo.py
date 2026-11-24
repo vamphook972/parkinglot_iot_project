@@ -54,11 +54,13 @@ def main():
     flujos = [mios.pop(n['id'], n) for n in actual['flows']]
     flujos += mios.values()                        # nodos nuevos
     sobran = [n['id'] for n in actual['flows'] if n.get('z') == TAB and n['id'] not in {x['id'] for x in NUEVO}]
+    if sobran:
+        print(f'En el editor hay {len(sobran)} nodos que no están en flow.json: {", ".join(sobran)}')
+        if input('¿Borrarlos? [s/N]: ').strip().lower() == 's':
+            flujos = [n for n in flujos if n['id'] not in sobran]
     pedir('POST', '/flows', {'flows': flujos, 'rev': actual['rev']}, token=token,
           **{'Node-RED-Deployment-Type': 'nodes'})
     print(f'Listo: {len(mios)} nodos nuevos. Respaldo en {respaldo}')
-    if sobran:
-        print(f'En el editor hay {len(sobran)} nodos que no están en flow.json; no los borré: {sobran}')
 
 
 try:

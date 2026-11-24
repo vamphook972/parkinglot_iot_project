@@ -461,17 +461,6 @@
         ]
     },
     {
-        "id": "a_nota",
-        "type": "comment",
-        "z": "parqueadero_unico",
-        "g": "gs_1_20",
-        "name": "Accesos: toda rama termina en \"Responder\" (publica acceso/cmd y libera la cola)",
-        "info": "",
-        "x": 689,
-        "y": 934,
-        "wires": []
-    },
-    {
         "id": "a_in",
         "type": "mqtt in",
         "z": "parqueadero_unico",
@@ -951,7 +940,6 @@
         "g": "gs_1_20",
         "name": "Errores de esta sección",
         "scope": [
-            "a_nota",
             "a_c_placa",
             "a_q_ins_placa",
             "a_ok",
@@ -1414,17 +1402,6 @@
         ]
     },
     {
-        "id": "r_nota",
-        "type": "comment",
-        "z": "parqueadero_unico",
-        "g": "gs_2_10",
-        "name": "API de reservas — POST /reservas (crear) · DELETE /reservas/:id (cancelar)",
-        "info": "Cuerpo de POST:\n{\n  \"reservation_id\": \"RSV-8F3K2\",\n  \"node_id\": \"PARKING-002\",\n  \"space_id\": \"B-017\",\n  \"plate\": \"ABC123\",\n  \"starts_at\": \"2026-11-10T08:00:00-05:00\",\n  \"ends_at\": \"2026-11-10T10:00:00-05:00\"\n}",
-        "x": 679,
-        "y": 1760,
-        "wires": []
-    },
-    {
         "id": "r_in_post",
         "type": "http in",
         "z": "parqueadero_unico",
@@ -1752,7 +1729,6 @@
         "g": "gs_2_00",
         "name": "Errores de la API",
         "scope": [
-            "r_nota",
             "r_c_crear",
             "r_q_insert",
             "r_creada",
@@ -1771,7 +1747,6 @@
             "r_val_cancelar",
             "lo_res_http",
             "lo_res_mqtt",
-            "d1a0000000000001",
             "d1a0000000000002",
             "d1a0000000000003",
             "d1a0000000000020",
@@ -1780,7 +1755,6 @@
             "d1a0000000000004",
             "d1a0000000000005",
             "lo_con_http",
-            "b20a75d1588f137b",
             "6b3f7d0912f49307",
             "dbe598fd31272387",
             "8ef48f77d2ccb031",
@@ -2261,17 +2235,6 @@
         "statusType": "auto",
         "x": 2002,
         "y": 5622,
-        "wires": []
-    },
-    {
-        "id": "d1a0000000000001",
-        "type": "comment",
-        "z": "parqueadero_unico",
-        "g": "gs_2_20",
-        "name": "API de consulta — GET /parqueaderos · /parqueaderos/:node_id/bahias · /parqueaderos/:node_id/agenda · /reservas/:id · /reservas (solo lectura, sin cola)",
-        "info": "Convenciones: fechas en ISO 8601 con -05:00. En la URL, codifica los ':' y el '+' (encodeURIComponent).\n/parqueaderos/:node_id/bahias?desde=...&hasta=... calcula 'available' para esa franja; sin parámetros devuelve 'libre ahora'.\n/reservas exige al menos un filtro: placa, node_id, status o fecha (opcional limit, máx. 500).",
-        "x": 789,
-        "y": 2157,
         "wires": []
     },
     {
@@ -3814,17 +3777,6 @@
         "wires": []
     },
     {
-        "id": "b20a75d1588f137b",
-        "type": "comment",
-        "z": "parqueadero_unico",
-        "g": "gs_2_30",
-        "name": "GET de solo lectura. :nodo = PARKING-002 ... o TODOS. Probar en Postman: http://localhost:1880/api/resumen/TODOS",
-        "info": "",
-        "x": 761,
-        "y": 2534,
-        "wires": []
-    },
-    {
         "id": "6b3f7d0912f49307",
         "type": "http in",
         "z": "parqueadero_unico",
@@ -4459,17 +4411,6 @@
         ]
     },
     {
-        "id": "c_mqtt_out",
-        "type": "comment",
-        "z": "parqueadero_unico",
-        "g": "gs_1_01",
-        "name": "Todo lo que Node-RED publica a los nodos sale por aquí",
-        "info": "Llegan: acceso/cmd, acceso/evento, bahia/evento y bahia/reserva desde registro, accesos, reservas, la revisión de cada minuto y las pruebas.",
-        "x": 1550,
-        "y": 240,
-        "wires": []
-    },
-    {
         "id": "li_registro",
         "type": "link in",
         "z": "parqueadero_unico",
@@ -4717,13 +4658,12 @@
         },
         "nodes": [
             "li_mqtt",
-            "a_mqtt_out",
-            "c_mqtt_out"
+            "a_mqtt_out"
         ],
-        "x": 1314,
-        "y": 199,
-        "w": 472,
-        "h": 132
+        "x": 1429,
+        "y": 249,
+        "w": 307,
+        "h": 82
     },
     {
         "id": "gs_1_10",
@@ -4774,7 +4714,6 @@
             "color": "#333333"
         },
         "nodes": [
-            "a_nota",
             "a_c_placa",
             "a_q_ins_placa",
             "a_ok",
@@ -4804,9 +4743,9 @@
             "lo_acc_cola"
         ],
         "x": 323,
-        "y": 893,
+        "y": 933,
         "w": 2352,
-        "h": 502
+        "h": 462
     },
     {
         "id": "gs_1",
@@ -4869,7 +4808,6 @@
             "color": "#333333"
         },
         "nodes": [
-            "r_nota",
             "r_c_crear",
             "r_q_insert",
             "r_creada",
@@ -4890,9 +4828,9 @@
             "lo_res_mqtt"
         ],
         "x": 313,
-        "y": 1719,
+        "y": 1779,
         "w": 2137,
-        "h": 362
+        "h": 302
     },
     {
         "id": "gs_2_20",
@@ -4908,7 +4846,6 @@
             "color": "#333333"
         },
         "nodes": [
-            "d1a0000000000001",
             "d1a0000000000002",
             "d1a0000000000003",
             "d1a0000000000020",
@@ -4919,10 +4856,10 @@
             "lo_con_http",
             "d1a0000000000006"
         ],
-        "x": 253,
-        "y": 2116,
-        "w": 1287,
-        "h": 395
+        "x": 333,
+        "y": 2196,
+        "w": 1207,
+        "h": 315
     },
     {
         "id": "gs_2_30",
@@ -4938,7 +4875,6 @@
             "color": "#333333"
         },
         "nodes": [
-            "b20a75d1588f137b",
             "6b3f7d0912f49307",
             "dbe598fd31272387",
             "8ef48f77d2ccb031",
@@ -4953,10 +4889,10 @@
             "rango_val",
             "rango_lo"
         ],
-        "x": 325,
-        "y": 2493,
-        "w": 1137,
-        "h": 397
+        "x": 395,
+        "y": 2553,
+        "w": 1067,
+        "h": 332
     },
     {
         "id": "gs_2",
@@ -4977,10 +4913,10 @@
             "gs_2_30",
             "gs_2_40"
         ],
-        "x": 227,
+        "x": 287,
         "y": 1516,
-        "w": 2249,
-        "h": 1345
+        "w": 2189,
+        "h": 1395
     },
     {
         "id": "gs_3_00",
@@ -5068,9 +5004,9 @@
             "auto_si",
             "auto_lo"
         ],
-        "x": 323,
+        "x": 313,
         "y": 3371,
-        "w": 892,
+        "w": 902,
         "h": 502
     },
     {
@@ -5114,7 +5050,7 @@
         "x": 323,
         "y": 3908,
         "w": 972,
-        "h": 587
+        "h": 542
     },
     {
         "id": "gs_4_20",
@@ -5166,9 +5102,9 @@
             "gs_4_10",
             "gs_4_20"
         ],
-        "x": 297,
+        "x": 287,
         "y": 3345,
-        "w": 1097,
+        "w": 1107,
         "h": 1608
     },
     {
@@ -5741,7 +5677,7 @@
             "rango_li"
         ],
         "x": 945,
-        "y": 2844,
+        "y": 2820,
         "wires": [],
         "z": "parqueadero_unico",
         "g": "gs_2_30"
@@ -5774,8 +5710,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 949,
-        "y": 4289,
+        "x": 1070,
+        "y": 4280,
         "wires": [
             [
                 "05fa52fdd01a0a3c"
