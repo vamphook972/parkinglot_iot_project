@@ -1,0 +1,23 @@
+meta {
+  name: Categorias
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/categorias/:nodo
+  body: none
+  auth: none
+}
+
+params:path {
+  nodo: {{nodeId}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Distribución por categorías. Acepta `TODOS` como nodo.
+}

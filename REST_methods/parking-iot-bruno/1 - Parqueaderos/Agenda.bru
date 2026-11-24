@@ -1,0 +1,27 @@
+meta {
+  name: Agenda
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/parqueaderos/:node_id/agenda?fecha={{fecha}}
+  body: none
+  auth: none
+}
+
+params:query {
+  fecha: {{fecha}}
+}
+
+params:path {
+  node_id: {{nodeId}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Franjas reservadas de un día, sin placas. `fecha` es obligatoria.
+}

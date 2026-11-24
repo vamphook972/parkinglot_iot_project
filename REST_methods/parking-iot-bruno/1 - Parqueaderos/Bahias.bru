@@ -1,0 +1,28 @@
+meta {
+  name: Bahias
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/parqueaderos/:node_id/bahias
+  body: none
+  auth: none
+}
+
+params:query {
+  ~desde: {{inicio}}
+  ~hasta: {{fin}}
+}
+
+params:path {
+  node_id: {{nodeId}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Estado de cada bahía. Con `desde` y `hasta` (van juntos), disponibilidad en esa franja.
+}

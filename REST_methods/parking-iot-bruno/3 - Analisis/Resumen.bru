@@ -1,0 +1,23 @@
+meta {
+  name: Resumen
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/resumen/:nodo
+  body: none
+  auth: none
+}
+
+params:path {
+  nodo: {{nodeId}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Indicadores generales. Acepta `TODOS` como nodo.
+}

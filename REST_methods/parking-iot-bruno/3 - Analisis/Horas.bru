@@ -1,0 +1,23 @@
+meta {
+  name: Horas
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/horas/:nodo
+  body: none
+  auth: none
+}
+
+params:path {
+  nodo: {{nodeId}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Perfil por hora. Acepta `TODOS` como nodo.
+}

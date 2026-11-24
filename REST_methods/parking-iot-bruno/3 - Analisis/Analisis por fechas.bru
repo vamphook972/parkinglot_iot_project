@@ -1,0 +1,25 @@
+meta {
+  name: Analisis por fechas
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/analisis?desde={{desde}}&hasta={{hasta}}
+  body: none
+  auth: none
+}
+
+params:query {
+  desde: {{desde}}
+  hasta: {{hasta}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Análisis de un periodo, calculado al momento. No guarda nada.
+  Se puede enviar una sola fecha o ninguna.
+}

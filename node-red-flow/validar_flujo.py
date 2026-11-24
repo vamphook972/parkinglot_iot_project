@@ -1,6 +1,6 @@
 """Validaciones end-to-end del flujo de Node-RED (HTTP + MQTT) con el nodo PARKING-TEST.
 
-Replica las pruebas de Bruno (REST_methods/parking-iot-bruno) y agrega los casos
+Prueba la API de reservas y de análisis (casos válidos y de error) y los casos
 de acceso por MQTT de la nota de requerimientos.
 
 Uso (desde la raíz del repo):
@@ -10,8 +10,8 @@ Con adminAuth activo (contraseña del editor), la prueba de la revisión de cada
 dispara el inject por la API de administración y necesita iniciar sesión:
     NODE_RED_USER=admin NODE_RED_PASS='tu contraseña' simulation_node/.venv/bin/python node-red-flow/validar_flujo.py
 
-Deja datos de prueba en la BD (reservas RSV-*, sesiones de placas V*) en PARKING-TEST,
-igual que las pruebas de Bruno. El nodo PARKING-TEST se crea solo con el registro MQTT.
+Deja datos de prueba en la BD (reservas RSV-*, sesiones de placas V*) en PARKING-TEST.
+El nodo PARKING-TEST se crea solo con el registro MQTT.
 Para quitarlo después (las reservas no se borran en cascada con la bahía):
 
     DELETE re FROM reservation_events re JOIN reservations r USING (reservation_id)
@@ -230,8 +230,8 @@ check(f'parqueadero lleno ({len(adentro)} entraron) -> NO_BAYS', razon == 'NO_BA
 for p in adentro:
     acceso('exit', plate=p, extra_seg=0.3)
 
-# ---------------------------------------------------------------- HTTP: reservas (Bruno 1 - Reservas)
-print('\n== HTTP reservas (Bruno)')
+# ---------------------------------------------------------------- HTTP: reservas
+print('\n== HTTP reservas')
 rA, rB, rC = f'RSV-A{RUN}', f'RSV-B{RUN}', f'RSV-C{RUN}'
 pA, pB, pC = f'PA{RUN}', f'PB{RUN}', f'PC{RUN}'
 casos = [
@@ -358,8 +358,8 @@ code, body, _ = http('GET', f'/reservas/{rT}')
 check('revisión: sin llegada a los 10 min -> expired', code == 200 and body.get('status') == 'expired', (code, body))
 check('revisión: sin llegada -> bahia/reserva false (amarillo OFF)', br is not None, br)
 
-# ---------------------------------------------------------------- HTTP: análisis (Bruno 2 - Analisis)
-print('\n== HTTP análisis (Bruno)')
+# ---------------------------------------------------------------- HTTP: análisis
+print('\n== HTTP análisis')
 code, body, h = http('GET', '/api/nodos')
 check('01 /api/nodos -> lista', code == 200 and isinstance(body, list), (code, body))
 check('01 /api/nodos trae CORS', h.get('Access-Control-Allow-Origin') == '*', dict(h))

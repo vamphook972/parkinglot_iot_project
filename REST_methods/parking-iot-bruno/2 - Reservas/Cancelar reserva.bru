@@ -1,0 +1,23 @@
+meta {
+  name: Cancelar reserva
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/reservas/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: {{reservaId}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Cancela la última reserva creada. Solo si está `reserved` o `active`.
+}

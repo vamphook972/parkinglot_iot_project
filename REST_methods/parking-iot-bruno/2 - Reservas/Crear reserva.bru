@@ -1,0 +1,36 @@
+meta {
+  name: Crear reserva
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/reservas
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "reservation_id": "{{reservaId}}",
+    "node_id": "{{nodeId}}",
+    "space_id": "{{bahia}}",
+    "plate": "{{placa}}",
+    "starts_at": "{{inicio}}",
+    "ends_at": "{{fin}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:pre-request {
+  // Código nuevo en cada envío; lo usan Consultar y Cancelar
+  bru.setVar('reservaId', 'RSV-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+}
+
+docs {
+  Códigos de error: 400 datos inválidos, 404 bahía inexistente, 409 cruce o código repetido.
+  Si empieza en 10 min o menos nace `active`; si no, `reserved`.
+}

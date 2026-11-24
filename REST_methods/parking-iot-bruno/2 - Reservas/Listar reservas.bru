@@ -1,0 +1,28 @@
+meta {
+  name: Listar reservas
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/reservas?node_id={{nodeId}}
+  body: none
+  auth: none
+}
+
+params:query {
+  node_id: {{nodeId}}
+  ~placa: {{placa}}
+  ~status: reserved
+  ~fecha: {{fecha}}
+  ~limit: 20
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Exige al menos un filtro: placa, node_id, status o fecha.
+  `limit` es 100 por defecto y 500 como máximo.
+}

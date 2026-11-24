@@ -34,7 +34,7 @@ Los tópicos MQTT siguen la forma `parqueadero/{node_id}/...`:
 | `parking-app/` | Las páginas web y `publicar_pages.sh`, que publica la página del usuario en GitHub Pages. |
 | `simulation_node/` | `nodo_simulado.py` (simula un ESP32) y los generadores de historial con su SQL. |
 | `sql_schemas/` | Esquema de la base: tablas crudas, capa limpia y tablas de análisis. |
-| `REST_methods/` | Colección de Bruno para probar la API a mano. |
+| `REST_methods/` | Colección de Bruno: una petición por cada ruta de la API. |
 
 ## Puesta en marcha
 

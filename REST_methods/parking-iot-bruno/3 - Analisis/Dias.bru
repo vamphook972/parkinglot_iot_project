@@ -1,0 +1,23 @@
+meta {
+  name: Dias
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/dias/:nodo
+  body: none
+  auth: none
+}
+
+params:path {
+  nodo: {{nodeId}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Serie por día. Acepta `TODOS` como nodo.
+}
